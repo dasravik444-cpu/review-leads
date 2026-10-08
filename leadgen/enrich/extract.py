@@ -35,6 +35,9 @@ SOCIAL_HOST_KIND = {
 }
 
 CONTACT_LINK_WORDS = re.compile(r"contact|about|reach|find[\s\-_]?us|get[\s\-_]?in[\s\-_]?touch|connect|enquir|inquir|location|visit[\s\-_]?us|book|reserv|support|"
+                                # pages that often carry an address of their own: events@, catering@, careers@...
+                                r"cater|events?\b|private[\s\-_]?(?:dining|events?|parties|room)|parties|group[\s\-_]?(?:dining|sales)|"
+                                r"careers?|jobs?\b|employment|work[\s\-_]?with[\s\-_]?us|press|media|wholesale|gift[\s\-_]?cards?|faq|"
                                 # German sites: the legally required Impressum carries the owner, address, phone and e-mail
                                 r"kontakt|impressum|imprint|anfahrt|standort|so[\s\-_]?finden|[uü]e?ber[\s\-_]?uns", re.I)
 POLICY_LINK_WORDS = re.compile(r"privacy|terms|polic|legal|disclaimer|refund|cancellation|datenschutz|\bagb\b|rechtliches", re.I)
@@ -457,7 +460,9 @@ def rank_contact_links(links: list[tuple[str, str]], limit: int) -> list[str]:
             return 1
         if any(w in s for w in ("reach", "find", "touch", "location", "visit", "connect", "anfahrt", "standort")):
             return 2
-        return 3
+        if any(w in s for w in ("cater", "event", "private", "parties", "group")):
+            return 3            # restaurants' events/catering pages often show their own address
+        return 4
     return [u for u, _ in sorted(links, key=score)[:limit]]
 
 
