@@ -90,6 +90,7 @@ def build_parser() -> argparse.ArgumentParser:
     o.add_argument("--db", default=DEFAULT_OUTREACH_DB, help=f"outreach state database (default {DEFAULT_OUTREACH_DB})")
     o.add_argument("--mode", choices=["dry-run", "live"], default=None, help="override [outreach].mode")
     o.add_argument("--max-emails", type=int, default=None, help="send at most this many e-mails in this run (testing)")
+    o.add_argument("--attach", default=None, help="attach this PDF to first e-mails (default: [outreach.email] attachment)")
     sub.add_parser("probe", help="live diagnostics of external sources").add_argument("--only", default="")
     return ap
 
@@ -199,7 +200,7 @@ def cmd_outreach(cfg, args) -> int:
     store = OutreachStore(args.db)
     try:
         live = None if args.mode is None else args.mode == "live"
-        engine = Outreach(cfg, store, live=live, max_emails=args.max_emails)
+        engine = Outreach(cfg, store, live=live, max_emails=args.max_emails, attach=args.attach)
         code, summary = engine.run()
     finally:
         store.close()

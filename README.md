@@ -42,6 +42,7 @@ config/us/          one file per US city, _base.toml (shared), fleet.toml (which
 config/shared/      the business types (categories.toml)
 config/examples/    single campaigns: UK, Australia, ...
 site/               customer pages: site.json (you), businesses/<id>.json (customers), build.py
+marketing/          the two-page sales PDF for businesses (pitch.json = your details, build_pitch.py)
 guests/             WhatsApp review requests to guests who agreed
 scripts/            make_us_cities.py (city files), ci/ (fleet plan, encrypted state, probes)
 .github/workflows/  US fleet, outreach, tests, probes

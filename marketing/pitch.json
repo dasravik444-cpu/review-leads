@@ -1,0 +1,11 @@
+{
+  "_comment": "Details printed on the sales PDF (python marketing/build_pitch.py). Change them here and rebuild.",
+  "brand": "GuestEcho",
+  "name": "Ravik",
+  "email": "das.ravik002@gmail.com",
+  "phone": "",
+  "website": "",
+  "example_business": "Joe's Diner",
+  "qr_demo": "Example only: Joe's Diner review and pay page",
+  "year": "2026"
+}

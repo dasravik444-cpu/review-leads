@@ -30,7 +30,8 @@ class SendResult:
 
 
 def build_message(*, sender_name: str, sender_addr: str, to: str, subject: str, body: str,
-                  in_reply_to: str = "", references: list[str] | None = None) -> EmailMessage:
+                  in_reply_to: str = "", references: list[str] | None = None,
+                  attachments: list[tuple[str, bytes]] | None = None) -> EmailMessage:
     msg = EmailMessage()
     msg["From"] = formataddr((sender_name, sender_addr)) if sender_name else sender_addr
     msg["To"] = to
@@ -43,7 +44,15 @@ def build_message(*, sender_name: str, sender_addr: str, to: str, subject: str, 
     # Lets mail apps show an "unsubscribe" button; the request arrives as an e-mail and is honoured.
     msg["List-Unsubscribe"] = f"<mailto:{sender_addr}?subject=unsubscribe>"
     msg.set_content(body)          # text/plain, utf-8; no HTML, links, images or tracking pixels
+    for name, data in attachments or []:
+        msg.add_attachment(data, maintype="application", subtype="pdf", filename=name)
     return msg
+
+
+def body_text(msg: EmailMessage) -> str:
+    """The plain-text body, also when the message carries an attachment."""
+    part = msg.get_body(preferencelist=("plain",))
+    return (part.get_content() if part is not None else "").strip()
 
 
 def classify_smtp_error(code: int, text: str) -> str:

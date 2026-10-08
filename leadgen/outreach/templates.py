@@ -23,18 +23,21 @@ from urllib.parse import quote
 # English (US, UK, Australia)
 # ---------------------------------------------------------------------------------------------------------------
 EN = {
+    # Short (about 110 words), personal first line, one easy question to answer, no links (better delivery).
     "subjects": [
         "Google reviews for {business}",
-        "{business} - more Google reviews, the compliant way",
-        "quick idea for {business}'s Google reviews",
+        "{business} on Google Maps",
+        "quick idea for {business}",
     ],
     "first": """{greeting}
 
-I'm {sender_first} from {sender_business}. {intro}
+{intro} {hook}
 
-{hook} We set up a small QR/tap stand for tables and the counter that opens your Google review page in one tap - next to your payment link if you have one. Every guest is asked the same way, with no discounts or filtering, as Google requires. {offer}
+That's what we fix: a small QR + tap stand on your tables opens your Google review page in one tap, right before guests pay. Google counts reviews and rating in its local ranking, so more reviews help {business} show up higher on Google Maps.
 
-Shall I make a free preview for {business}? Just reply "yes".
+{offer} {attachment_note}
+
+Want a free preview page with your name on it? Just reply "yes".
 
 Thanks,
 {sender_name}
@@ -42,13 +45,15 @@ Thanks,
     "follow_ups": [
         """{greeting}
 
-Just bringing this back to the top of your inbox. If more Google reviews for {business} would help, I'm happy to make a free preview - a one-word "yes" is enough.
+A quick follow-up on my note about Google reviews for {business}. Guests need no app, everyone is asked the same way (fully within Google's rules), and it's a one-time price, no subscription.
+
+Want me to send a free preview with your name on it? A one-word "yes" is enough.
 
 {sender_name}
 {footer}""",
         """{greeting}
 
-Last note from me. Whenever you want an easy, Google-compliant way for happy guests to find your review page, I'm a reply away.
+Last note from me, promise. If more Google reviews for {business} become a priority, just reply "yes" and I'll send you a free preview page. Either way, thanks for reading.
 
 All the best,
 {sender_name}
@@ -56,12 +61,13 @@ All the best,
     ],
     "footer": """{sender_business}
 {sender_address}
-{sender_phone}
+WhatsApp/phone: {sender_phone}
 
 {source_line}
 Not interested? Just reply "no" and we won't write again.""",
     "source_line": "We found this address on your website or public listing; reply \"delete\" and we erase it.",
-    "offer": "It's a one-time setup, no subscription.",
+    "offer": "It's a one-time price from $99, no monthly fees.",
+    "attachment_note": "I've attached a two-page overview (PDF) with pictures of how it works.",
     "intro_usp": 'I came across {business} and liked this line on your website: "{usp}".',
     "intro_plain": "I came across {business} while looking at {audience} in {place}.",
     "greeting_named": "Hi {first_name},",
@@ -198,7 +204,7 @@ LANGS = {"en": (EN, HOOKS_EN, AUDIENCE_EN), "de": (DE, HOOKS_DE, AUDIENCE_DE)}
 
 PLACEHOLDERS = {"greeting", "business", "first_name", "first_name_or_team", "audience", "place", "hook", "usp", "intro",
                 "offer", "demo_link", "sender_name", "sender_first", "sender_business", "sender_phone", "sender_city",
-                "sender_address", "sender_website", "footer", "source_line", "person"}
+                "sender_address", "sender_website", "footer", "source_line", "person", "attachment_note"}
 
 # The templates the rest of the code (and the config validation) refers to, in the default language.
 SUBJECTS = EN["subjects"]
@@ -280,6 +286,7 @@ def context(lead, oc: dict, lang: str = "") -> dict:
         "person": person,
         "offer": str(oc.get("offer") or "").strip() or t["offer"],
         "demo_link": demo_link(oc, lead.business, lang),
+        "attachment_note": "",       # set by the engine when the e-mail carries the PDF
     }
     ctx["greeting"] = render(t["greeting_named"] if first else t["greeting_team"], ctx)
     ctx["hook"] = render(hooks.get(group) or hooks.get(lead.category_key) or hooks.get("default", ""), ctx)

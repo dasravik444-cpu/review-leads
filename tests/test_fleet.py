@@ -197,3 +197,41 @@ def test_mistakes_from_the_austin_sample_are_caught(tmp_path):
     assert st.category_for("dentist", "dentist", "Smile Studio", "hello@smilestudio.com") == "dental"
     assert st.category_for("dentist", "dentist", "Bright Dental & Chiropractic") == "dental"   # both: the code decides
     assert st.category_for("cafe", "cafe", "The Laundromat Cafe") == "cafe"                    # only between specialists
+
+
+# ------------------------------------------------------------------ the sales PDF and the manual test send
+def test_first_email_carries_the_pdf_and_a_manual_test_goes_out_after_hours(tmp_path):
+    from leadgen.outreach.mailer import body_text
+
+    pdf = tmp_path / "pitch.pdf"
+    pdf.write_bytes(b"%PDF-1.4 two pages")
+    sender = {**SENDER, "city": "", "postal_address": "1 Main St, Austin, TX 78701"}       # no city needed
+    cfg = make_config(campaign={"country": "US", "timezone": "America/Chicago", "language": "en", "region": "us",
+                                "lead_id_prefix": "US"},
+                      area={"name": "Austin", "center": [30.27, -97.74], "radius_km": 3},
+                      outreach={"sender": sender, "email": {"start_per_day": 5, "step": 0, "max_per_day": 40, "max_per_run": 8,
+                                                            "window_start": "09:30", "window_end": "16:30"},
+                                "whatsapp": {"start_per_day": 0, "step": 0, "max_per_day": 0, "include_mobiles": False}})
+    _sess, client = sheet_with([lead(1, "Taco Town", email="hola@tacotown.com"), lead(2, "Brew Lab", email="hi@brewlab.com")])
+    smtp = SmtpWorld()
+    tz = ZoneInfo("America/Chicago")
+    evening = Clock(datetime(2026, 10, 8, 19, 30, tzinfo=tz).timestamp())          # a Thursday, after sending hours
+    db = str(tmp_path / "o.sqlite")
+    code, s = runner(cfg, OutreachStore(db), client, evening, smtp, attach=str(pdf)).run()
+    assert code == 0, s
+    assert smtp.sent == []                                       # the timetable waits for business hours...
+    code, s = runner(cfg, OutreachStore(db), client, evening, smtp, max_emails=1, attach=str(pdf)).run()
+    assert code == 0, s
+    [first] = smtp.sent                                          # ...a manual test run goes out right away
+    assert [(a.get_filename(), a.get_content_type(), a.get_content()) for a in first.iter_attachments()] == \
+        [("pitch.pdf", "application/pdf", b"%PDF-1.4 two pages")]
+    text = body_text(first)
+    assert "attached a two-page overview (PDF)" in text and "$99" in text and "Ravi" in text
+    # three days later: the follow-up carries no attachment, a new first e-mail does
+    later = Clock(datetime(2026, 10, 12, 16, 0, tzinfo=tz).timestamp())           # last run of the day: all due go out
+    code, s = runner(cfg, OutreachStore(db), client, later, smtp, attach=str(pdf)).run()
+    assert code == 0, s
+    by_to = {m["To"]: m for m in smtp.sent[1:]}
+    assert set(by_to) == {"hola@tacotown.com", "hi@brewlab.com"}
+    assert by_to["hola@tacotown.com"]["Subject"].startswith("Re:") and not list(by_to["hola@tacotown.com"].iter_attachments())
+    assert [a.get_filename() for a in by_to["hi@brewlab.com"].iter_attachments()] == ["pitch.pdf"]

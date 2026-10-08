@@ -67,7 +67,7 @@ DEFAULTS: dict = {
                   "window_start": "10:00", "window_end": "18:30", "days": ["mon", "tue", "wed", "thu", "fri", "sat"],
                   "skip_dates": [], "follow_up_days": [3, 7], "include_unverified": False, "one_per_domain": True,
                   "pause_bounce_rate": 0.05, "pause_min_sends": 20, "max_bounces_per_day": 3, "run_budget_minutes": 35,
-                  "subjects": [], "first": "", "follow_ups": []},
+                  "subjects": [], "first": "", "follow_ups": [], "attachment": ""},
         "whatsapp": {"enabled": True, "start_per_day": 20, "step": 10, "step_every_days": 3, "max_per_day": 50,
                      "include_mobiles": True, "message": "", "opted_in_message": ""},
         # Postal letters (the first contact where cold e-mail is not allowed, e.g. Germany): a daily "Letters"

@@ -12,6 +12,7 @@ import random
 import re
 import time
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from .. import country
 from ..enrich.phones import display_phone, parse_phone
@@ -23,7 +24,7 @@ from .inbox import GmailInbox
 from .leads import (FREE_MAIL, STATUS_BOUNCED, STATUS_DONE, STATUS_EMAILED, STATUS_FOLLOWUP, STATUS_INTERESTED,
                     STATUS_LETTER_QUEUED, STATUS_LETTER_SENT, STATUS_OPTED_IN, STATUS_OPTED_OUT, STATUS_REPLIED, Lead,
                     email_domain, read_leads)
-from .mailer import GmailSender, build_message
+from .mailer import GmailSender, body_text, build_message
 from .sheet import OutreachSheet
 from .whatsapp import LETTER_CODES, REASONS, ads_library_link, result_code, wa_link
 
@@ -49,7 +50,8 @@ def _id_num(lead_id: str) -> int:
 
 class Outreach:
     def __init__(self, cfg, store, *, client=None, sender=None, inbox=None, live: bool | None = None,
-                 max_emails: int | None = None, now_fn=time.time, sleep_fn=time.sleep, rng=None, use_sheet: bool = True):
+                 max_emails: int | None = None, now_fn=time.time, sleep_fn=time.sleep, rng=None, use_sheet: bool = True,
+                 attach: str | None = None):
         self.cfg, self.store = cfg, store
         self.o = cfg["outreach"]
         # The repository is public: the owner's number and alert address can come from GitHub secrets instead.
@@ -63,6 +65,9 @@ class Outreach:
         self.now, self.sleep = now_fn, sleep_fn
         self.rng = rng or random.Random()
         self.max_emails = max_emails
+        # A PDF for the first e-mail (e.g. marketing/pitch.pdf): the --attach option, else [outreach.email] attachment.
+        path = attach if attach is not None else str(self.o["email"].get("attachment") or "")
+        self.attachment = (os.path.basename(path), Path(path).read_bytes()) if path else None
         if live is None:
             live = self.o["mode"] == "live" or os.environ.get("OUTREACH_LIVE", "").strip().lower() in ("1", "true", "yes")
         self.live = live
@@ -116,7 +121,7 @@ class Outreach:
 
     def _sender_problem(self) -> str:
         s = self.o["sender"]
-        missing = [k for k in ("name", "business", "phone", "city") if not str(s.get(k, "")).strip()]
+        missing = [k for k in ("name", "business", "phone") if not str(s.get(k, "")).strip()]
         if self.rules.postal_address_required and not str(s.get("postal_address", "")).strip():
             missing.append("postal_address")
         if missing:
@@ -354,7 +359,7 @@ class Outreach:
             for item in self._pick(n):
                 msg = self._compose(item)
                 self.preview.append([today, item["lead"].lead_id, item["lead"].business, item["email"],
-                                     msg["Subject"], msg.get_content().strip(), item["lead"].key])
+                                     msg["Subject"], body_text(msg), item["lead"].key])
             self.stats["planned"] = len(self.preview)
             self._dry_run_login_check()
             return
@@ -363,9 +368,13 @@ class Outreach:
             self.notes.append(f"sending paused until {fmt_local(self.cfg.tz, paused)} ({self.store.get('pause_reason', '')})")
             return
         ok, why, end = self._window(local)
-        if not ok:
+        if not ok and self.max_emails is None:
             self.notes.append(f"no e-mails this run: {why}")
             return
+        if not ok:
+            # A manual test run ("max_emails") goes out now, whatever the time.
+            self.notes.append(f"manual test run: sending now although it is {why}")
+            end = local + timedelta(hours=1)
         if remaining <= 0:
             return
         problem = self.sender.check()
@@ -487,9 +496,12 @@ class Outreach:
         tx = T.texts(self.lang)
         addr = self.sender.address if self.sender else "you@example.com"
         if item["kind"] == "new":
+            if self.attachment:
+                ctx["attachment_note"] = tx.get("attachment_note", "")
             subject = self.rules.subject_prefix + T.render(T.pick(e.get("subjects") or tx["subjects"], lead.key), ctx)
             body = T.render(e.get("first") or tx["first"], ctx)
-            return build_message(sender_name=s.get("name", ""), sender_addr=addr, to=item["email"], subject=subject, body=body)
+            return build_message(sender_name=s.get("name", ""), sender_addr=addr, to=item["email"], subject=subject, body=body,
+                                 attachments=[self.attachment] if self.attachment else None)
         t = item["thread"]
         follow_ups = e.get("follow_ups") or tx["follow_ups"]
         body = T.render(follow_ups[min(item["step"] - 2, len(follow_ups) - 1)], ctx)
@@ -513,7 +525,7 @@ class Outreach:
                         self.notes.append("run time budget reached - the rest goes out in the next run")
                         break
                     self.sleep(gap)
-                    if not self._window(self._local())[0]:
+                    if self.max_emails is None and not self._window(self._local())[0]:
                         break
                 try:
                     msg = self._compose(item)
@@ -523,7 +535,7 @@ class Outreach:
                     continue
                 self._record(item, msg, res)
                 self.sent_log.append([item["lead"].lead_id, item["lead"].business, item["email"], res.status,
-                                      msg["Subject"], msg.get_content().strip()])
+                                      msg["Subject"], body_text(msg)])
                 if res.ok:
                     temp_failures = 0
                     continue

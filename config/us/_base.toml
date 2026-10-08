@@ -100,14 +100,14 @@ use_curl_cffi = false
 
 [outreach]
 mode = "dry-run"
-offer = "It's a one-time setup, no subscription."
+offer = "It's a one-time price from $99, no monthly fees."
 demo_url = ""
 privacy_url = ""
 
 [outreach.sender]
-name = ""
-business = ""
-city = ""
+name = "Ravik"
+business = "GuestEcho"         # working brand name: change it here and in marketing/pitch.json
+city = ""                      # optional
 phone = ""               # secret OUTREACH_SENDER_PHONE
 postal_address = ""      # REQUIRED by CAN-SPAM: secret OUTREACH_POSTAL_ADDRESS
 website = ""

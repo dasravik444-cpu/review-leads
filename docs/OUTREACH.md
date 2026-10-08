@@ -85,8 +85,23 @@ Placeholders you can use include `{business}`, `{greeting}`, `{person}`, `{place
 The preview link is your `demo_url` plus the business name, e.g. `…/demo/?n=Café%20Morgenrot&lang=de`. It shows
 the business its own page before it buys.
 
+## The sales PDF
+
+`marketing/pitch.pdf` is the two-page overview for businesses: how the stand works (scan → review → pay), why Google
+reviews bring customers (with sources), the WhatsApp/e-mail requests with up to 3 reminders, the prices and your
+contact details. Change the details (brand, name, e-mail, phone) in `marketing/pitch.json` and rebuild it:
+
+```
+python marketing/build_pitch.py --png      # needs Playwright + Chromium; --png also saves page images
+```
+
+Attaching it: the Outreach workflow's `attach_pdf` switch adds it to the first e-mails of that run (follow-ups never
+carry it), or set `[outreach.email] attachment = "marketing/pitch.pdf"` for every run. For cold e-mails at volume
+it is better **not** to attach it: attachments from a new Gmail account land in spam more often. Send the PDF to the
+businesses that reply instead.
+
 ## Testing
 
 - *Actions → Outreach → Run workflow* with `mode = dry-run`: fills the previews and sends nothing.
-- `max_emails = 1` with `mode = live`: sends exactly one e-mail. Send it to yourself first: add your own address
-  as a test lead with Status *Opted in*.
+- `max_emails = 1` with `mode = live`: sends exactly one e-mail, right away (also outside the sending hours). Send it
+  to yourself first: add your own address as a test lead with Status *Opted in*.

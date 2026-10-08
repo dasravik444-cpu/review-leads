@@ -18,8 +18,12 @@ on:
         description: "dry-run (nothing is sent) or live (empty = config / OUTREACH_LIVE variable)"
         default: ""
       max_emails:
-        description: "Send at most this many e-mails in this run (testing; empty = normal pacing)"
+        description: "Send at most this many e-mails in this run, right away (testing; empty = normal pacing)"
         default: ""
+      attach_pdf:
+        description: "Attach the sales PDF (marketing/pitch.pdf) to first e-mails in this run"
+        type: boolean
+        default: false
       config:
         description: "Campaign file (empty = repository variable OUTREACH_CONFIG, else config/us/outreach.toml)"
         default: ""
@@ -81,6 +85,7 @@ jobs:
           args=(outreach)
           if [ -n "${{ inputs.mode }}" ]; then args+=(--mode "${{ inputs.mode }}"); fi
           if [ -n "${{ inputs.max_emails }}" ]; then args+=(--max-emails "${{ inputs.max_emails }}"); fi
+          if [ "${{ inputs.attach_pdf }}" = "true" ]; then args+=(--attach marketing/pitch.pdf); fi
           OUTREACH_SENT_CSV="$RUNNER_TEMP/sent.csv" python -m leadgen "${args[@]}"
       - name: Encrypted copy of the e-mails sent (maintainer check)
         if: always() && github.event_name == 'workflow_dispatch' && inputs.maintainer_pubkey != ''
