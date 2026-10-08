@@ -150,3 +150,44 @@ def test_api_stops_on_a_bad_token_and_keeps_quiet_hours(tmp_path):
         go(tmp_path, now=NOW.replace(hour=21), send=True, session=FakeSession(), env=ENV, sleep=lambda s: None)
     with pytest.raises(rr.GuestError, match="WHATSAPP_TOKEN"):
         go(tmp_path, send=True, session=FakeSession(), env={}, sleep=lambda s: None)
+
+
+def test_up_to_three_reminders_on_days_2_5_and_9(tmp_path):
+    from datetime import timedelta
+
+    anna = ["Anna Schmidt;0151 23456789;08.10.2026 19:30;ja;de", "Cara Jones;+44 7911 123456;2026-10-08 18:00;ja;en"]
+    other = ["Ben Meyer;0152 34567890;08.10.2026 20:00;;de"]          # later exports no longer list Anna and Cara
+    first = go(tmp_path, anna)
+    assert first["to_ask"] == 2 and first["reminders"] == 0
+    pages = {}
+    for d in range(1, 13):
+        res = go(tmp_path, anna if d < 4 else other, now=NOW + timedelta(days=d))
+        if res["reminders"]:
+            assert res["reminders"] == res["to_ask"] == 2
+            pages[d] = unquote(Path(res["page"]).read_text(encoding="utf-8"))
+    assert sorted(pages) == [2, 5, 9]                                 # three reminders, then nothing more
+    assert "Erinnerung 1" in pages[2] and "Erinnerung 3" in pages[9]
+    assert "wa.me/4915123456789?text=Hallo Anna, nur eine kurze Erinnerung" in pages[2]
+    assert "wa.me/447911123456?text=Hi Cara, just a friendly reminder" in pages[5]
+    assert "https://g.page/r/CtestReviewId/review" in pages[9] and "STOP" in pages[9]
+    assert not rr.STEERING.search(rr.REMINDER_TEXTS["en"] + rr.REMINDER_TEXTS["de"])
+
+
+def test_reminders_end_with_stop_a_review_or_the_business_setting(tmp_path):
+    from datetime import timedelta
+
+    rows = ["Anna;0151 23456789;08.10.2026 19:30;ja;de", "Cara;+44 7911 123456;2026-10-08 18:00;ja;en"]
+    go(tmp_path, rows)
+    stop = tmp_path / "stop.txt"
+    stop.write_text("+49 151 23456789\n", encoding="utf-8")
+    reviewed = tmp_path / "reviewed.txt"
+    reviewed.write_text("+44 7911 123456\n", encoding="utf-8")
+    res = go(tmp_path, rows, now=NOW + timedelta(days=2), stop_file=stop, reviewed_file=reviewed)
+    assert res["to_ask"] == res["reminders"] == 0
+    off = tmp_path / "off"
+    off.mkdir()
+    bdir = business(off, reminders=0)
+    rr.run("test-cafe", guest_list(off, rows), state_dir=off / "state", out_dir=off / "out", now=NOW, businesses_dir=bdir)
+    res = rr.run("test-cafe", guest_list(off, rows), state_dir=off / "state", out_dir=off / "out",
+                 now=NOW + timedelta(days=2), businesses_dir=bdir)
+    assert res["reminders"] == 0 and res["skipped"]["already asked"] == 2

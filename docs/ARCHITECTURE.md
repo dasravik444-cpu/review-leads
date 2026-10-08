@@ -224,7 +224,8 @@ Description, Contact Sources, Other Contacts (unverified), Plan Part, Last Updat
 `python -m guests.review_requests <id> guests.csv [--send]` follows the rules in docs/COMPLIANCE.md, section 5:
 
 - Only guests who consented are asked, 2 hours to 7 days after the visit.
-- Each guest is asked at most once in 90 days, never after STOP.
+- Each guest gets one request in 90 days plus at most 3 short reminders (days 2, 5 and 9), never after STOP or
+  once they have reviewed.
 - Everyone gets the same neutral text.
 
 The memory is a small JSON file per customer (`guests-state/`). Both it and the output pages are kept out of git.

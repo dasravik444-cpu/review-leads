@@ -211,8 +211,8 @@ A rule can be changed per country in its pack if you decide otherwise.
   - EN: *"Yes, send me one WhatsApp message after my visit asking for a Google review. I can reply STOP at any
     time."*
 - **Same message for everyone who agreed.** No "were you happy?" step first and nothing offered in return (sections
-  2 and 3). The tool asks each guest at most once per 90 days, from 2 hours to 7 days after the visit, and never
-  after STOP.
+  2 and 3). The tool asks each guest once per 90 days, from 2 hours to 7 days after the visit, then sends at most
+  3 short reminders (days 2, 5 and 9; the business setting `reminders` lowers this, 0 = none), and never after STOP.
 - **Who is responsible.**
   - The restaurant is the data controller of its guest list. If we run the tool for it, we are its processor and
     need a data processing agreement (*Auftragsverarbeitungsvertrag*, Art. 28 GDPR) with it.

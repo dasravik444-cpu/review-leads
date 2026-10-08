@@ -85,8 +85,12 @@ Give them this list. Breaking these rules can cost them their reviews (docs/COMP
 
    - It opens a page with one *WhatsApp* button per guest. Tap, check, send. This is free.
    - It only includes guests who agreed and visited 2 hours to 7 days ago.
-   - Nobody gets a second message within 90 days.
+   - Each guest gets one request in 90 days, then up to 3 short reminders: on days 2, 5 and 9 after it. Run the
+     tool every day so reminders go out on time; they also reach guests who are no longer in the newest export.
+     Fewer reminders: set `"reminders": 1` (or 0) in the business file.
    - `stop.txt` lists numbers that replied STOP, one per line. They are never asked again.
+   - `--reviewed reviewed.txt` lists numbers of guests who have reviewed (the restaurant sees their names on
+     Google). They get no more reminders.
 5. **Automatic sending** (optional, paid per message: about €0.11 in Germany):
    - The restaurant needs a WhatsApp Business Platform number in Meta Business Suite. Such a number usually
      can't stay in the normal WhatsApp Business app as well. Meta's "coexistence" option allows both in some
@@ -94,6 +98,9 @@ Give them this list. Breaking these rules can cost them their reviews (docs/COMP
    - Register a *Marketing* template named `review_request` with three variables. German example: "Hallo {{1}},
      danke für Ihren Besuch bei {{2}}! Wenn Sie mögen, erzählen Sie anderen auf Google davon: {{3}} Ob kurz oder
      lang, Ihre ehrliche Meinung hilft. Keine Nachrichten mehr? Antworten Sie STOP."
+   - For the reminders, a second template named `review_reminder` with the same three variables, e.g. "Hi {{1}},
+     just a friendly reminder in case you missed it: if you have a moment, you can share your experience at {{2}}
+     on Google here: {{3}} No more messages? Reply STOP."
    - Then: `WHATSAPP_TOKEN=… WHATSAPP_PHONE_NUMBER_ID=… python -m guests.review_requests cafe-morgenrot
      guests.csv --send`.
    - It only sends between 10:00 and 20:00 local time.
