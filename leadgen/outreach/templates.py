@@ -290,7 +290,7 @@ def context(lead, oc: dict, lang: str = "") -> dict:
     }
     ctx["greeting"] = render(t["greeting_named"] if first else t["greeting_team"], ctx)
     ctx["hook"] = render(hooks.get(group) or hooks.get(lead.category_key) or hooks.get("default", ""), ctx)
-    usp = re.sub(r"\s+", " ", getattr(lead, "usp", "") or "").strip().strip(".").replace('"', "'")
+    usp = re.sub(r"\s+", " ", getattr(lead, "usp", "") or "").strip().rstrip(".!?").replace('"', "'")
     ctx["usp"] = usp
     ctx["intro"] = render(t["intro_usp"] if usp and t["intro_usp"] else t["intro_plain"], ctx)
     ctx["source_line"] = render(t["source_line"], ctx) if t.get("source_line") else ""
