@@ -93,7 +93,7 @@ loop until deadline or stop signal:
     stop when there is nothing left to do now
 drain in-flight work (bounded), put unfinished tasks back in the queue
 refresh part status -> Google Sheets upsert -> Plan tab -> Daily Report row -> JSON + summary
-then: e-mail hunt for leads still without an e-mail (8 minutes)
+then: e-mail hunt for leads still without an e-mail (45 minutes in the US fleet)
 ```
 
 Enrichment per business (open-data mode):
@@ -104,6 +104,9 @@ website?  yes -> crawl as ReviewLeadBot, robots.txt respected: home page + up to
                  (Kontakt, Impressum, Über uns, Contact, About...), privacy pages and the sitemap's contact pages
           no  -> the e-mail hunt tries the obvious domains for the name; a site counts only if it shows
                  the business's phone number, or its name with its postcode
+site does not answer -> its archived pages from Common Crawl, read with the same rules
+still no e-mail      -> web search for the address it published elsewhere ([enrich] email_search), kept only
+                        when tied to the business (its domain or name, or its phone number shown with it)
 ```
 
 A business becomes a **lead** when it has at least one phone, WhatsApp, e-mail or Instagram that is not

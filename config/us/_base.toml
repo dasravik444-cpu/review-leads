@@ -78,6 +78,11 @@ instagram_profile = false
 check_email_mx = true
 role_email_candidates = true
 email_hunt = true
+email_archive = true      # sites that do not answer us: their archived pages from Common Crawl (open web archive)
+# Leads still without an address: a web search for the address the business published elsewhere (its Facebook
+# page, a chamber or catering directory...). Kept only when tied to the business. This reads search-engine result
+# pages (Yahoo, DuckDuckGo), which their terms of use do not allow for automated use: set false to stop it.
+email_search = true
 workers = 12             # 12 websites at a time (public repositories get 4-core machines)
 site_interval_s = 2.0    # pause between two pages of the same website (polite crawling)
 
@@ -94,7 +99,7 @@ require_any = ["email", "whatsapp"] # only businesses we can actually write to g
 checkpoint_minutes = 20
 
 [runtime]
-time_budget_minutes = 150    # per city per day (the fleet workflow lowers it on a private repository)
+time_budget_minutes = 120    # per city per day, then 45 minutes of e-mail hunt (the fleet lowers it on a private repository)
 safety_margin_minutes = 6
 use_curl_cffi = false
 

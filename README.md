@@ -63,8 +63,9 @@ Lead data, guest lists and keys never go into git (`.gitignore`). On GitHub the 
 ## For website owners: ReviewLeadBot
 
 If you found this page through your server logs: `ReviewLeadBot` reads the public contact pages of local
-businesses (home, contact, about, privacy pages, at most six pages per site). It identifies itself and
-follows your `robots.txt`. To keep it out, add:
+businesses (home, contact, about, privacy pages, at most ten pages per site). It identifies itself and
+follows your `robots.txt`. When a site does not answer, it reads that site's copy in Common Crawl's public
+archive instead. To keep it out, add:
 
 ```
 User-agent: ReviewLeadBot

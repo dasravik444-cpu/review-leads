@@ -68,7 +68,7 @@ def test_fleet_runs_every_city_when_public_and_one_a_day_when_private():
     fm = fleet_matrix()
     fleet = tomllib.loads((ROOT / "config" / "us" / "fleet.toml").read_text())["cities"]
     pub = fm.plan("", private=False, budget="")
-    assert pub["matrix"] == fleet and pub["parallel"] == min(15, len(fleet)) and pub["budget"] == 150
+    assert pub["matrix"] == fleet and pub["parallel"] == min(15, len(fleet)) and pub["budget"] == 120
     day1, day2 = (fm.plan("", private=True, budget="", today=date(2026, 10, d)) for d in (8, 9))
     assert len(day1["matrix"]) == 1 and day1["matrix"] != day2["matrix"]           # cities take turns
     assert day1["parallel"] == 1 and day1["budget"] == 25

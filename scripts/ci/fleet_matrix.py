@@ -2,7 +2,8 @@
 
     python scripts/ci/fleet_matrix.py "<cities or empty>" <private: true|false> "<budget or empty>"
 
-Public repository: every city in config/us/fleet.toml, 15 at a time, 150 minutes each (GitHub's minutes are free).
+Public repository: every city in config/us/fleet.toml, 15 at a time, 120 minutes each plus the e-mail hunt
+(GitHub's minutes are free).
 Private repository (2,000 minutes a month): one city per day, in turn, 25 minutes - unless cities are named.
 """
 from __future__ import annotations
@@ -33,7 +34,7 @@ def plan(requested: str, private: bool, budget: str, today: dt.date | None = Non
         cities = [fleet[day % len(fleet)]]          # one city a day, in turn
     else:
         cities = list(fleet)
-    minutes = int(budget) if budget.strip() else (25 if private else 150)
+    minutes = int(budget) if budget.strip() else (25 if private else 120)
     return {"matrix": cities, "parallel": 1 if private else min(15, len(cities)), "budget": minutes}
 
 

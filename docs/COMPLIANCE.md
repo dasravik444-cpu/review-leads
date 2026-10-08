@@ -196,6 +196,22 @@ only the law:
 
 A rule can be changed per country in its pack if you decide otherwise.
 
+### Where the e-mail addresses come from
+
+Only addresses the business published are used. Nothing is guessed (no info@ made up for a domain):
+
+1. Open data (Overture Maps, OpenStreetMap), with the record as evidence.
+2. The business's own website, read as `ReviewLeadBot` with robots.txt respected.
+3. When its website does not answer us: the same pages as archived by **Common Crawl**, the open web archive
+   (free, meant for reuse; its crawler honours robots.txt). We ask its index politely: one lookup at a time with
+   pauses, and none for the rest of the run once it says "slow down".
+4. When there is still no address: a **web search** for the address the business published elsewhere (its
+   Facebook page, a chamber or catering directory, a local news page). An address is kept only when it is tied
+   to the business: its website's domain, its name in the address, or its phone number and name shown with it.
+   This reads search-engine result pages (Yahoo, DuckDuckGo), which their terms of use do not allow for automated
+   use. It is not against the law, but the engines can block it. Switch it off with `email_search = false` in
+   `config/us/_base.toml`; a Brave Search API key (`BRAVE_API_KEY`) is the official alternative.
+
 ## 5. Review requests to a restaurant's guests (WhatsApp / SMS)
 
 - **Consent first, everywhere.** In Germany a review request is advertising (BGH VI ZR 225/17), so an e-mail or

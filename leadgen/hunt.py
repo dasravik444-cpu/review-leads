@@ -8,8 +8,12 @@
 2. No website on its listing (or a dead/taken-over one): the obvious addresses for its name are checked,
    and a site is accepted only when it shows the business's own phone number (or exact name + PIN code).
    Then that site is read like step 1.
+3. Its website does not answer (down, or blocking unknown bots): its archived pages from Common Crawl, the
+   open web archive, are read the same way ([enrich] email_archive).
+4. Still no address: a web search for the business's published address ([enrich] email_search, off by
+   default), kept only when it is tied to the business (its domain or name, or its phone number shown with it).
 
-Every e-mail kept comes from a page of the business's own site, with that page as its source. Nothing is
+Every e-mail kept was published by or for the business, with the page it came from as its source. Nothing is
 guessed. Network work runs in threads; the database is only touched by the main thread."""
 from __future__ import annotations
 
@@ -21,17 +25,19 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 
 from .db import DB
+from .enrich.archive import ArchivedSite, CommonCrawl
 from .enrich.domains import Discovery, Resolver, discover_website
+from .enrich.email_search import search_emails
 from .enrich.emails import MXChecker
 from .enrich.extract import canonical_social, host_of, registrable
 from .enrich.website import SiteResult, crawl_site, normalize_url
-from .net import DeadlineReached, Http, NetworkDown
+from .net import Blocked, BreakerOpen, DeadlineReached, FetchError, Http, NetworkDown
 from .quality import is_aggregator, is_link_hub
 from .report import lead_id
 from .util import get_logger, jdump
 
 log = get_logger("hunt")
-HUNT_VERSION = "v1"
+HUNT_VERSION = "v2"         # v2: archived websites + web search (leads looked at by v1 get these steps too)
 LEADS = "qualified=1 AND excluded IS NULL AND merged_into IS NULL"
 
 
@@ -76,7 +82,13 @@ class Outcome:
     site: SiteResult | None = None          # the listed website, read deeply
     discovery: Discovery | None = None      # looking for a website the listing lacks
     found_site: SiteResult | None = None    # the website found that way, read deeply
+    archived: SiteResult | None = None      # its website's archived pages (Common Crawl), when it did not answer
+    searched: dict | None = None            # e-mail -> (result URL, result text, why it is theirs) from a web search
     error: str = ""
+
+
+def _has_email(res: SiteResult) -> bool:
+    return any(c.kind == "email" and c.confidence != "low" for c in res.contacts)
 
 
 def _usable_site(url: str) -> bool:
@@ -86,7 +98,8 @@ def _usable_site(url: str) -> bool:
 class EmailHunt:
     def __init__(self, cfg, db: DB, *, limit: int = 200, budget_minutes: float = 60.0, workers: int | None = None,
                  use_sheets: bool = True, http: Http | None = None, resolver: Resolver | None = None,
-                 mx: MXChecker | None = None, now_fn=time.time, detail_path: str = "", sheets_factory=None):
+                 mx: MXChecker | None = None, now_fn=time.time, detail_path: str = "", sheets_factory=None,
+                 archive: CommonCrawl | None = None, search=None):
         self.cfg, self.db = cfg, db
         self.limit = limit
         self.budget_s = budget_minutes * 60
@@ -97,6 +110,9 @@ class EmailHunt:
         self.now = now_fn
         self.detail_path = detail_path
         self.sheets_factory = sheets_factory
+        self._archive, self._search = archive, search
+        self.archive: CommonCrawl | None = None
+        self.search = None
         self.region = cfg["campaign"]["country"]
         self.city = (cfg["area"].get("name") or "").split(",")[0].strip().lower()
         self.stats: Counter = Counter()
@@ -177,17 +193,50 @@ class EmailHunt:
         if listed and _usable_site(listed):
             out.site = crawl_site(self.http, listed, job.name, max_pages=pages, region=self.region, interval=interval,
                                   known_phones=tuple(job.phones), deep=True, variants=True)
-            if out.site.status in ("ok", "blocked_robots") and (out.site.owned or out.site.status == "blocked_robots"):
-                return out          # their site was read (or refuses robots): nothing more to find
-        if not job.phones:
-            return out              # no phone number to prove a found site is theirs
-        self._check_time()
-        out.discovery = discover_website(self.http, job.name, job.phones, job.address, region=self.region, city=self.city,
-                                         resolver=self.resolver, extra_labels=job.handles)
-        if out.discovery.url and (not listed or registrable(host_of(out.discovery.url)) != registrable(host_of(listed))):
-            out.found_site = crawl_site(self.http, out.discovery.url, job.name, max_pages=pages, region=self.region,
-                                        interval=interval, known_phones=tuple(job.phones), deep=True, variants=False)
+            if out.site.status == "error" and self.archive is not None:
+                out.archived = self._read_archive(listed, job, pages)
+            read = [r for r in (out.site, out.archived) if r is not None and r.status == "ok" and r.owned]
+            if read or out.site.status == "blocked_robots":
+                # Their site was read (or refuses robots): no other website to look for.
+                if not any(_has_email(r) for r in read):
+                    out.searched = self._web_search(job, listed)
+                return out
+        if job.phones:
+            self._check_time()
+            out.discovery = discover_website(self.http, job.name, job.phones, job.address, region=self.region,
+                                             city=self.city, resolver=self.resolver, extra_labels=job.handles)
+            if out.discovery.url and (not listed or registrable(host_of(out.discovery.url)) != registrable(host_of(listed))):
+                out.found_site = crawl_site(self.http, out.discovery.url, job.name, max_pages=pages, region=self.region,
+                                            interval=interval, known_phones=tuple(job.phones), deep=True, variants=False)
+        if not any(_has_email(r) for r in (out.site, out.archived, out.found_site) if r is not None):
+            site = out.found_site.final_url if out.found_site is not None and out.found_site.owned else listed
+            out.searched = self._web_search(job, site)
         return out
+
+    def _read_archive(self, listed: str, job: Job, pages: int) -> SiteResult | None:
+        """The business's own pages as archived by Common Crawl (its live site did not answer us)."""
+        if not self.archive.available():
+            return None
+        self._check_time()
+        try:
+            caps = self.archive.captures(registrable(host_of(listed)))
+        except (Blocked, BreakerOpen, FetchError) as exc:
+            log.info("archive lookup skipped for %s: %s", job.lead_id, exc)
+            return None
+        if not caps:
+            return None
+        res = crawl_site(ArchivedSite(self.archive, caps, listed), listed, job.name, max_pages=min(pages, 8),
+                         region=self.region, interval=0.0, known_phones=tuple(job.phones), deep=True, variants=False)
+        for c in res.contacts:
+            c.source = "archive"
+        return res
+
+    def _web_search(self, job: Job, site: str) -> dict | None:
+        if self.search is None or not self.search.available():
+            return None
+        self._check_time()
+        city = self.city.title() if self.city else ""
+        return search_emails(self.search, job.name, city, job.phones, host_of(site) if site else "", self.region) or None
 
     # ------------------------------------------------------------------ results (main thread)
     def _store_site(self, key: str, res: SiteResult) -> tuple[int, int]:
@@ -249,12 +298,31 @@ class EmailHunt:
             if found.description and not place["description"]:
                 self.db.update_place(job.key, description=found.description[:300])
                 changed = True
+        arch = out.archived
+        arch_email = False
+        if arch is not None and arch.status == "ok" and arch.owned:
+            a, n = self._store_site(job.key, arch)
+            changed |= a > 0
+            arch_email = n > 0
+        search_email = False
+        for e, (url, text, tie) in (out.searched or {}).items():
+            if self.mx.has_mx(e.split("@", 1)[1]) is False:
+                continue
+            changed |= self.db.add_contact(job.key, "email", e, label=f"published address found by web search: {tie}",
+                                           source="search", source_url=url, confidence="medium",
+                                           evidence=f"search result: {text}"[:200])
+            search_email = True
         if changed:
             self.db.mark_dirty(job.key)
         has_email = self.db.one("SELECT 1 FROM contacts WHERE place_key=? AND kind='email' AND confidence!='low'",
                                 (job.key,)) is not None
+        site_email = any(r is not None and r.status == "ok" and _has_email(r) for r in (site, found))
         if has_email and sibling_email and not (site and site.status == "ok") and not (found and found.status == "ok"):
             outcome = "e-mail found in another listing (same phone)"
+        elif has_email and arch_email and not site_email:
+            outcome = "e-mail found in its website's archived pages (Common Crawl)"
+        elif has_email and search_email and not site_email:
+            outcome = "e-mail found by web search (published elsewhere)"
         elif has_email and not job.website and site is not None and site.status == "ok":
             outcome = "e-mail found on a website named in another listing"
         elif has_email:
@@ -308,6 +376,17 @@ class EmailHunt:
             self.http.deadline = deadline
         self.http.hard_deadline = True
         self.deadline = deadline
+        e = self.cfg["enrich"]
+        self.archive = self._archive if self._archive is not None else (CommonCrawl(self.http) if e["email_archive"] else None)
+        if self._search is not None:
+            self.search = self._search
+        elif e["email_search"]:
+            from .enrich.search import WebSearch
+
+            # Search engines get their own client: the business websites keep seeing our named bot.
+            shttp = Http(use_curl_cffi=False, deadline=deadline, default_interval=float(e["search_interval_s"]))
+            shttp.hard_deadline = True
+            self.search = WebSearch(shttp, interval=float(e["search_interval_s"]), region=self.region)
         jobs = self._select()
         before = self._coverage()
         log.info("e-mail hunt: %d leads without a usable e-mail to look at (coverage now %s%%)", len(jobs), before[2])
@@ -342,6 +421,10 @@ class EmailHunt:
                    "email_coverage_before": before[2], "email_coverage_after": after[2],
                    "leads_with_email_before": before[0], "leads_with_email_after": after[0], "leads": after[1],
                    "outcomes": dict(self.stats.most_common()), "minutes": round((self.now() - start) / 60, 1), "notes": self.notes}
+        if self.archive is not None:
+            summary["archive"] = {**dict(self.archive.stats), "index lookups": self.archive.lookups}
+        if self.search is not None:
+            summary["web_search"] = {k: v for k, v in self.search.stats.items() if any(v.values())}
         if self.use_sheets:
             summary["sheet"] = self._sync_sheet()
         if self.detail_path:

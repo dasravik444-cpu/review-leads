@@ -109,8 +109,10 @@ class WebSearch:
     ENGINES = ("yahoo", "ddg_html", "ddg_lite")
     INTERVALS = {"yahoo": 4.5, "ddg_html": 60.0, "ddg_lite": 60.0}
 
-    def __init__(self, http: Http, interval: float | None = None, jitter: float = 4.0, engines: tuple | None = None):
+    def __init__(self, http: Http, interval: float | None = None, jitter: float = 4.0, engines: tuple | None = None,
+                 region: str = "IN"):
         self.http = http
+        self.region = (region or "IN").upper()
         self.base_interval, self.jitter = interval, jitter
         self.engines = list(engines or self.ENGINES)
         self.brave_key = os.environ.get("BRAVE_API_KEY", "").strip()
@@ -126,10 +128,10 @@ class WebSearch:
         common = dict(service="search:" + engine, interval=interval, jitter=self.jitter, timeout=20, retries=0,
                       block_statuses=(429, 403, 202))
         if engine == "ddg_html":
-            r = self.http.post("https://html.duckduckgo.com/html/", data={"q": query, "kl": "in-en"}, **common)
+            r = self.http.post("https://html.duckduckgo.com/html/", data={"q": query, "kl": f"{self.region.lower()}-en"}, **common)
             return r, parse_ddg_html
         if engine == "ddg_lite":
-            r = self.http.get("https://lite.duckduckgo.com/lite/", params={"q": query, "kl": "in-en"}, **common)
+            r = self.http.get("https://lite.duckduckgo.com/lite/", params={"q": query, "kl": f"{self.region.lower()}-en"}, **common)
             return r, parse_ddg_lite
         if engine == "yahoo":
             r = self.http.get("https://search.yahoo.com/search", params={"p": query, "n": "15"}, **common)
@@ -137,7 +139,7 @@ class WebSearch:
         raise ValueError(engine)
 
     def _brave(self, query: str) -> list[Result]:
-        r = self.http.get("https://api.search.brave.com/res/v1/web/search", params={"q": query, "count": "10", "country": "IN"},
+        r = self.http.get("https://api.search.brave.com/res/v1/web/search", params={"q": query, "count": "10", "country": self.region},
                           headers={"X-Subscription-Token": self.brave_key, "Accept": "application/json"},
                           service="search:brave_api", interval=1.2, timeout=20, retries=1, browser=False)
         data = r.json() if r.status == 200 else {}

@@ -41,7 +41,10 @@ DEFAULTS: dict = {
     "enrich": {"website": True, "max_pages_per_site": 6, "social_search": True,
                "social_kinds": ["instagram", "facebook", "linkedin"], "instagram_profile": True,
                "check_email_mx": True, "workers": 6, "search_interval_s": 4.5, "site_interval_s": 2.0,
-               "api_enrich": True, "role_email_candidates": True, "email_hunt": True},
+               "api_enrich": True, "role_email_candidates": True, "email_hunt": True,
+               # E-mail hunt extras: archived copies of sites that do not answer (Common Crawl, open data) and a
+               # web search for a published address (search-engine result pages: off unless switched on).
+               "email_archive": True, "email_search": False},
     # require_any: only leads with one of these contacts go to the sheet, e.g. ["email", "whatsapp"] (empty = every
     # lead). plan_tab / report_tab = "" leave that tab out (several cities sharing one sheet: see config/us/).
     "sheets": {"enabled": True, "spreadsheet_id": "", "leads_tab": "Leads", "plan_tab": "Plan",

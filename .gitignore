@@ -31,3 +31,6 @@ venv/
 # Cloudflare tool cache
 .wrangler/
 node_modules/
+
+# your copy of the sales PDF with your phone number (not for the public repository)
+GuestEcho-overview*

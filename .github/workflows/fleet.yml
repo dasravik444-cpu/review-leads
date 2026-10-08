@@ -16,7 +16,7 @@ on:
         description: "Cities, comma-separated (empty = the fleet list; on a private repository: today's city)"
         default: ""
       budget_minutes:
-        description: "Work time per city in minutes (empty = 150 public / 25 private)"
+        description: "Work time per city in minutes, before the e-mail hunt (empty = 120 public / 25 private)"
         default: ""
       use_sheet:
         description: "Write to the Google Sheet"
@@ -112,7 +112,7 @@ jobs:
         if: (success() || failure()) && (env.PERSIST != 'true' || steps.restore.outcome == 'success')
         continue-on-error: true
         run: |
-          args=(email-hunt --limit 600 --budget-minutes 15)
+          args=(email-hunt --limit 1500 --budget-minutes 45)
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.use_sheet }}" != "true" ]; then args+=(--no-sheets); fi
           python -m leadgen "${args[@]}"
       - name: Encrypted lead sample (maintainer quality check)
