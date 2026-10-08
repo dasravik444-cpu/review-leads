@@ -45,6 +45,8 @@ class CommonCrawl:
         self._ids: list[str] | None = None
         self._lock = threading.Lock()
         self.lookups = 0
+        # The index is often slow (HTTP 504): a few timeouts in a row only pause it for ten minutes.
+        http.breaker("commoncrawl", threshold=8, cooldown=600.0)
         self.stats: Counter = Counter()
 
     def available(self) -> bool:

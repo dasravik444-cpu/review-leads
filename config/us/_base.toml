@@ -85,6 +85,7 @@ email_archive = true      # sites that do not answer us: their archived pages fr
 email_search = true
 workers = 12             # 12 websites at a time (public repositories get 4-core machines)
 site_interval_s = 2.0    # pause between two pages of the same website (polite crawling)
+search_interval_s = 12.0  # pause between two web searches (search engines cut off fast askers)
 
 [crawler]
 bot_name = "ReviewLeadBot"

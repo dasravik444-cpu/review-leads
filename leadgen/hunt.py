@@ -87,6 +87,22 @@ class Outcome:
     error: str = ""
 
 
+def _why_unreachable(error: str) -> str:
+    """A short class of a website error, for the run summary (what blocks us most)."""
+    e = (error or "").lower()
+    for words, label in ((("http 403", "http 401", "http 429", "blocked", "captcha", "challenge"), "refused us (403/429)"),
+                         (("http 404", "http 410"), "page not found (404)"),
+                         (("http 5",), "server error (5xx)"),
+                         (("timeout", "timed out"), "timeout"),
+                         (("ssl", "tls", "certificate"), "TLS/certificate error"),
+                         (("name or service", "nodename", "getaddrinfo", "nxdomain", "dns", "resolve"), "domain does not resolve"),
+                         (("robots.txt unreachable",), "robots.txt unreachable"),
+                         (("connection", "refused", "reset"), "connection failed")):
+        if any(w in e for w in words):
+            return label
+    return "other"
+
+
 def _has_email(res: SiteResult) -> bool:
     return any(c.kind == "email" and c.confidence != "low" for c in res.contacts)
 
@@ -332,6 +348,7 @@ class EmailHunt:
             outcome = "website refuses robots"
         elif site is not None and site.status == "error" and not (found and found.status == "ok"):
             outcome = "website unreachable"
+            self.stats["unreachable because: " + _why_unreachable(site.error)] += 1
         elif site is not None and site.status == "ok" and site.owned:
             outcome = "website read - no e-mail on it"
         elif found is not None and found.status == "ok":

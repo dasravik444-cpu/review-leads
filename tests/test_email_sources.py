@@ -80,7 +80,7 @@ def test_archive_that_says_slow_down_is_left_alone_for_the_run(tmp_path):
     code, s = EmailHunt(make_config(), db, limit=10, use_sheets=False, http=http, resolver=FakeResolver(set()),
                         mx=MXChecker(enabled=False), workers=1).run()
     assert code == 0, s
-    assert s["outcomes"] == {"website unreachable": 2}
+    assert s["outcomes"] == {"website unreachable": 2, "unreachable because: page not found (404)": 2}
     assert s["archive"]["index lookups"] == 1                                      # asked once, then no more
     assert sum(1 for _, u in http.calls if "CC-MAIN-2026-38-index" in u) == 1
 
