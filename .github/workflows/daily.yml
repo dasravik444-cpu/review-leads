@@ -1,0 +1,134 @@
+name: Daily lead generation
+
+# Runs every day by itself once the repository variable RQ_ENABLED is "true"
+# (Settings > Secrets and variables > Actions > Variables). The campaign file is the repository variable
+# RQ_CONFIG (default config/us/austin.toml; the US cities run in "US fleet"). Follow-up runs finish unfinished work and end within a
+# minute or two when nothing is left.
+# This repository is private: GitHub's free plan gives 2,000 Actions minutes a month for all private
+# repositories of the account, so there are two slots a day and the work budget is small (docs/SETUP.md).
+# Manual runs: Actions tab > Daily lead generation > Run workflow.
+on:
+  schedule:
+    - cron: "7 4 * * *"      # 06:07 Berlin summer time / 05:07 winter time: main run
+    - cron: "7 13 * * *"     # 15:07 / 14:07: catch-up (GitHub sometimes delays or drops a scheduled run)
+  workflow_dispatch:
+    inputs:
+      budget_minutes:
+        description: "Time budget in minutes"
+        default: "30"
+      target:
+        description: "Override the daily lead target (empty = config value)"
+        default: ""
+      max_searches:
+        description: "Limit the number of searches (testing; empty = no limit)"
+        default: ""
+      use_sheet:
+        description: "Write to the Google Sheet"
+        type: boolean
+        default: true
+      persist_state:
+        description: "Restore/save the encrypted campaign state (turn off only for throw-away tests)"
+        type: boolean
+        default: true
+      replan:
+        description: "Re-plan the area first (needed after changing area or days; found leads are kept)"
+        type: boolean
+        default: false
+      mode:
+        description: "Override compliance mode: open-data | hybrid | standard (empty = config value)"
+        default: ""
+      config:
+        description: "Campaign file (empty = repository variable RQ_CONFIG or config/us/austin.toml)"
+        default: ""
+      maintainer_pubkey:
+        description: "Optional: base64 RSA public key - prints an ENCRYPTED sample of leads for a quality check"
+        default: ""
+
+permissions:
+  contents: read
+  actions: write          # read the saved state, and delete older copies of it (storage is limited)
+
+concurrency:
+  group: leadgen-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  run:
+    if: github.event_name == 'workflow_dispatch' || vars.RQ_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      RQ_STATE_KEY: ${{ secrets.RQ_STATE_KEY }}
+      RQ_SHEET_ID: ${{ secrets.RQ_SHEET_ID }}
+      RQ_CONFIG: ${{ inputs.config || vars.RQ_CONFIG || 'config/us/austin.toml' }}
+      GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+      GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
+      FOURSQUARE_API_KEY: ${{ secrets.FOURSQUARE_API_KEY }}
+      PYTHONUNBUFFERED: "1"
+      PERSIST: ${{ github.event_name != 'workflow_dispatch' || inputs.persist_state }}
+      RQ_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: |
+          pip install -r requirements.txt
+          pip install "duckdb>=1.1" || echo "duckdb unavailable - open-data discovery falls back to OpenStreetMap"
+      - name: Check configuration and secrets
+        id: campaign
+        run: |
+          python -m leadgen doctor --secrets-only
+          echo "id=$(python -c 'import os; from leadgen.config import load_config; print(load_config(os.environ["RQ_CONFIG"])["campaign"]["id"])')" >> "$GITHUB_OUTPUT"
+      - name: Restore campaign state
+        id: restore
+        if: env.PERSIST == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ART_NAME: rq-state-${{ steps.campaign.outputs.id }}
+        run: bash scripts/ci/state.sh restore
+      - name: Re-plan
+        if: github.event_name == 'workflow_dispatch' && inputs.replan
+        run: python -m leadgen plan --force
+      - name: Run daily cycle
+        run: |
+          args=(run --budget-minutes "${{ inputs.budget_minutes || '30' }}")
+          if [ -n "${{ inputs.target }}" ]; then args+=(--target "${{ inputs.target }}"); fi
+          if [ -n "${{ inputs.max_searches }}" ]; then args+=(--max-searches "${{ inputs.max_searches }}"); fi
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.use_sheet }}" != "true" ]; then args+=(--no-sheets); fi
+          python -m leadgen "${args[@]}"
+      - name: E-mail hunt (leads still without an e-mail)
+        if: (success() || failure()) && env.PERSIST == 'true' && steps.restore.outcome == 'success'
+        continue-on-error: true
+        run: |
+          args=(email-hunt --limit 300 --budget-minutes 8)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.use_sheet }}" != "true" ]; then args+=(--no-sheets); fi
+          python -m leadgen "${args[@]}"
+      - name: Encrypted lead sample (maintainer quality check)
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.maintainer_pubkey != ''
+        env:
+          PUBKEY_B64: ${{ inputs.maintainer_pubkey }}
+        run: bash scripts/ci/encrypted_sample.sh
+      - name: Save campaign state (encrypted)
+        # Only after a successful restore, so a failed restore never replaces the saved state.
+        if: always() && env.PERSIST == 'true' && steps.restore.outcome == 'success'
+        run: bash scripts/ci/state.sh pack
+      - name: Upload encrypted state
+        if: always() && env.PERSIST == 'true' && steps.restore.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: rq-state-${{ steps.campaign.outputs.id }}
+          path: state-out/rq-state.enc
+          retention-days: 30
+          if-no-files-found: ignore
+      - name: Delete older saved states (keep 3)
+        if: always() && env.PERSIST == 'true' && steps.restore.outcome == 'success'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ART_NAME: rq-state-${{ steps.campaign.outputs.id }}
+        run: bash scripts/ci/state.sh prune

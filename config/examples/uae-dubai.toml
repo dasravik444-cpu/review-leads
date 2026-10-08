@@ -1,0 +1,64 @@
+# Example campaign: Dubai (United Arab Emirates). Use with RQ_CONFIG = config/examples/uae-dubai.toml.
+#
+# UAE (docs/COMPLIANCE.md): no specific cold e-mail rule found; WhatsApp is the normal business channel, so published
+# WhatsApp numbers are offered one by one in the WhatsApp Queue (keep it to a handful a day: number bans are real).
+
+include = ["../shared/categories.toml", "../shared/all-categories.toml"]
+
+[campaign]
+id = "review-uae-dubai"
+timezone = "Asia/Dubai"
+country = "AE"
+language = "en"
+region = "ae"
+lead_id_prefix = "DXB"
+
+[area]
+name = "Dubai"
+aliases = ["Dubai UAE", "Deira", "Bur Dubai", "Jumeirah", "Dubai Marina"]
+center = [25.1972, 55.2744]
+radius_km = 25
+
+[plan]
+days = 10
+daily_target = "auto"
+
+[compliance]
+mode = "open-data"
+
+[filters]
+exclude_chains = [
+  "mcdonald", "kfc", "hardee", "burger king", "starbucks", "tim hortons", "costa", "caribou", "dunkin", "pizza hut",
+  "domino", "papa john", "shake shack", "five guys", "nando", "operation falafel", "zaatar w zeit", "fitness first",
+  "gold's gym", "tips & toes", "nstyle", "rotana", "jumeirah", "marriott", "hilton", "hyatt", "novotel", "ibis",
+  "rove hotel", "address hotel", "premier inn"
+]
+
+[sheets]
+require_any = ["email", "whatsapp"]   # only businesses we can write to go into the sheet
+
+[runtime]
+time_budget_minutes = 30
+
+[outreach]
+mode = "dry-run"
+offer = "It's a one-time setup, no subscription."
+
+[outreach.sender]
+name = ""
+business = ""
+city = ""
+phone = ""
+postal_address = ""
+
+[outreach.email]
+window_start = "09:00"
+window_end = "17:00"
+days = ["mon", "tue", "wed", "thu", "fri"]
+
+[outreach.whatsapp]
+start_per_day = 5
+step = 5
+step_every_days = 7
+max_per_day = 20
+include_mobiles = true

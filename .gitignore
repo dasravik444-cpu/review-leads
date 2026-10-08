@@ -1,0 +1,33 @@
+# Runtime state and outputs: never commit lead data or secrets (even in a private repository)
+state/
+state-out/
+out/
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+*.enc
+*.csv
+secrets.env
+*.json.key
+google_credentials*.json
+service-account*.json
+
+# The QR pages are built from site/ by `python site/build.py` (the build output is not kept)
+site/public/
+
+# Guest lists, review-request pages and their memory hold guests' names and numbers
+guests-state/
+guests-out/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+
+# Cloudflare tool cache
+.wrangler/
+node_modules/

@@ -1,0 +1,13 @@
+{
+  "_comment": "A restaurant that takes cards at the table: no payment link, the page asks for a review and says how to pay.",
+  "id": "demo-card-only",
+  "name": "Trattoria Demo",
+  "country": "DE",
+  "timezone": "Europe/Berlin",
+  "languages": ["de", "en"],
+  "review_url": "https://search.google.com/local/writereview?placeid=ChIJdemoPlaceId000",
+  "menu_url": "https://example.com/menu.pdf",
+  "payment": null,
+  "brand_color": "#8a2b2b",
+  "pay_note": ""
+}

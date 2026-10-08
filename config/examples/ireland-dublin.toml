@@ -1,0 +1,64 @@
+# Example campaign: Dublin (Ireland). Use with RQ_CONFIG = config/examples/ireland-dublin.toml.
+#
+# Ireland (docs/COMPLIANCE.md): companies (Ltd/DAC/PLC) may be e-mailed about their business with an opt-out; sole
+# traders need consent, so they get a letter (Letters tab) instead.
+
+include = ["../shared/categories.toml", "../shared/all-categories.toml"]
+
+[campaign]
+id = "review-ireland-dublin"
+timezone = "Europe/Dublin"
+country = "IE"
+language = "en"
+region = "ie"
+lead_id_prefix = "DUB"
+
+[area]
+name = "Dublin"
+aliases = ["Dublin City", "Dun Laoghaire", "Swords", "Tallaght"]
+center = [53.3498, -6.2603]
+radius_km = 15
+
+[plan]
+days = 10
+daily_target = "auto"
+
+[compliance]
+mode = "open-data"
+
+[filters]
+exclude_chains = [
+  "supermac", "mcdonald", "burger king", "apache pizza", "abrakebabra", "costa", "starbucks", "insomnia", "butlers",
+  "eddie rockets", "milano", "wagamama", "pizza hut", "domino", "flyefit", "gym plus", "energie fitness",
+  "anytime fitness", "toni & guy", "peter mark", "maldron", "clayton hotel", "jurys inn", "travelodge",
+  "holiday inn"
+]
+
+[sheets]
+require_any = ["email", "whatsapp"]   # only businesses we can write to go into the sheet
+
+[runtime]
+time_budget_minutes = 30
+
+[outreach]
+mode = "dry-run"
+offer = "It's a one-time setup, no subscription."
+
+[outreach.sender]
+name = ""
+business = ""
+city = ""
+phone = ""
+postal_address = ""
+
+[outreach.email]
+window_start = "10:00"
+window_end = "16:30"
+days = ["mon", "tue", "wed", "thu", "fri"]
+
+[outreach.whatsapp]
+start_per_day = 5
+step = 5
+step_every_days = 7
+max_per_day = 20
+include_mobiles = false

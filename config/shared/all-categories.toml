@@ -1,0 +1,37 @@
+# Switches on every business type in categories.toml (include it after categories.toml). Used by the
+# English-speaking markets: walk-in businesses of all kinds live on Google reviews there.
+[[categories]]
+key = "hotel"
+enabled = true
+
+[[categories]]
+key = "dental"
+enabled = true
+
+[[categories]]
+key = "auto"
+enabled = true
+
+[[categories]]
+key = "health"
+enabled = true
+
+[[categories]]
+key = "pets"
+enabled = true
+
+[[categories]]
+key = "tattoo"
+enabled = true
+
+[[categories]]
+key = "entertainment"
+enabled = true
+
+[[categories]]
+key = "retail"
+enabled = true
+
+[[categories]]
+key = "laundry"
+enabled = true

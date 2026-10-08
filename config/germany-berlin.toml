@@ -1,0 +1,154 @@
+# Campaign: Berlin, Germany - restaurants, cafes, bars, bakeries, salons and gyms.
+# Edit this file to change the area, the categories or the daily amount. Secrets (sheet id, Google key, Gmail
+# password, your phone number and postal address) are NOT stored here - see docs/SETUP.md.
+#
+# Germany's rules shape the outreach (docs/COMPLIANCE.md): advertising e-mails and WhatsApp messages to a
+# business need its prior consent (UWG §7), so the first contact is a LETTER (the "Letters" tab), and e-mail
+# only goes to businesses that asked for it (set their Status to "Opted in", or they reply to us).
+
+include = ["shared/categories.toml"]
+
+[campaign]
+id = "review-de-berlin"
+timezone = "Europe/Berlin"
+country = "DE"
+language = "de"
+region = "de"
+lead_id_prefix = "DE"
+start_date = ""          # day 1 of the plan; empty = the first run's date
+
+[area]
+name = "Berlin"
+aliases = []
+center = [52.5200, 13.4050]
+radius_km = 20
+
+[plan]
+days = 30                # the area is split into 30 daily parts
+daily_target = "auto"    # all businesses in the area / days
+order = "center_out"
+min_cell_km = 1.0
+max_cell_km = 8.0
+split_threshold = 60
+finish_scheduled_part = true
+
+[compliance]
+# "open-data": only openly licensed data (Overture Maps, OpenStreetMap) + each business's own website, crawled
+# openly as ReviewLeadBot where robots.txt allows. Nothing is scraped from Google. Keep this.
+mode = "open-data"
+
+[open_data]
+min_confidence = 0.5
+refresh_days = 30
+exclude_codes = ["internet_cafe", "hookah_bar", "cafeteria"]   # call shops, shisha bars, canteens
+
+[filters]
+require_contact = true
+exclude_closed = true
+allow_unmatched_categories = false
+# Chains decide centrally - poor leads. (Brands known to the open data are also skipped automatically.)
+exclude_chains = [
+  "mcdonald", "burger king", "kfc", "subway", "starbucks", "vapiano", "l'osteria", "losteria", "block house",
+  "hans im glück", "hans im glueck", "nordsee", "backwerk", "back-factory", "backfactory", "kamps", "ditsch",
+  "le crobag", "wienerwald", "dunkin", "coffee fellows", "balzac coffee", "tchibo", "woyton", "einstein kaffee",
+  "extrablatt", "alex", "maredo", "pizza hut", "domino", "joey's pizza", "joeys pizza", "call a pizza", "peter pane",
+  "burgerme", "five guys", "dean & david", "dean&david", "steinecke", "lila bäcker", "lila baecker",
+  "wiener feinbäcker", "wiener feinbaecker", "sausalitos", "enchilada", "mongo's", "mongos", "miss pepper",
+  "klier", "essanelle", "super cut", "cut & color", "mcfit", "clever fit", "fitx", "john reed", "fitness first",
+  "kieser", "mrs.sporty", "mrs sporty", "holmes place", "easyfit", "jumpers fitness", "superfit", "elixia",
+]
+# Places we never write to (substring of the name).
+exclude_name_words = ["erotik", "erotic", "tantra", "escort", "laufhaus", "bordell"]
+
+[enrich]
+website = true
+max_pages_per_site = 6
+social_search = false
+instagram_profile = false
+check_email_mx = true
+role_email_candidates = true
+email_hunt = true
+workers = 6
+site_interval_s = 2.0
+
+[crawler]
+bot_name = "ReviewLeadBot"
+contact_url = ""         # once you have a website, a page that says who crawls and how to object
+
+[sheets]
+enabled = true
+leads_tab = "Leads"
+plan_tab = "Plan"
+report_tab = "Daily Report"
+checkpoint_minutes = 20
+
+[runtime]
+time_budget_minutes = 30     # private repository: GitHub gives 2,000 free minutes a month (docs/SETUP.md)
+safety_margin_minutes = 4
+use_curl_cffi = false
+
+# ----------------------------------------------------------------------------
+# Outreach (workflow "Outreach"). Nothing is sent while mode = "dry-run".
+# ----------------------------------------------------------------------------
+[outreach]
+mode = "dry-run"
+offer = "Einmalige Einrichtung, kein Abo."
+demo_url = ""            # the preview page, e.g. "https://<your-site>/demo/" (site/ in this repository)
+privacy_url = ""
+
+[outreach.sender]
+name = ""                # your name, shown in letters and e-mails
+business = ""            # your business name
+city = ""
+phone = ""               # best as the secret OUTREACH_SENDER_PHONE (your WhatsApp number)
+postal_address = ""      # REQUIRED for letters/e-mails: best as the secret OUTREACH_POSTAL_ADDRESS
+website = ""
+notify_email = ""
+
+[outreach.email]
+enabled = true           # only businesses that asked for information are e-mailed in Germany
+start_per_day = 10
+step = 5
+step_every_days = 3
+max_per_day = 30
+window_start = "09:30"
+window_end = "17:00"
+days = ["mon", "tue", "wed", "thu", "fri"]
+follow_up_days = [5]
+
+[outreach.whatsapp]
+# Germany: no cold WhatsApp messages (they need consent like e-mail). Only people who said yes are queued.
+start_per_day = 10
+step = 5
+step_every_days = 3
+max_per_day = 30
+include_mobiles = false
+
+[outreach.letters]
+enabled = "auto"         # Germany: on
+per_day = 15             # letters prepared per day in the "Letters" tab
+
+# German search words (only used in "standard" mode, which searches Google Maps).
+[[categories]]
+key = "restaurant"
+queries = ["Restaurant"]
+
+[[categories]]
+key = "cafe"
+queries = ["Café", "Kaffee"]
+
+[[categories]]
+key = "bar"
+queries = ["Bar", "Kneipe"]
+
+[[categories]]
+key = "bakery"
+queries = ["Bäckerei", "Eiscafé"]
+
+[[categories]]
+key = "salon"
+queries = ["Friseur", "Barbershop", "Kosmetikstudio"]
+
+[[categories]]
+key = "gym"
+queries = ["Fitnessstudio"]

@@ -1,0 +1,108 @@
+name: Outreach (letters, e-mail + WhatsApp queue)
+
+# Builds the day's outreach from the Leads tab of the Google Sheet, following the campaign country's rules
+# (docs/COMPLIANCE.md): in Germany a "Letters" tab of addressed letters (cold e-mail needs consent there),
+# e-mails only to businesses that asked; in the US/UK/Australia warmed-up e-mails from a free Gmail account
+# where the law allows them. Runs on weekdays once the repository variable OUTREACH_ENABLED is "true".
+# Nothing is sent until the repository variable OUTREACH_LIVE is "true" (or [outreach].mode = "live"):
+# before that every run is a dry-run that fills the "Email Preview" tab instead. See docs/OUTREACH.md.
+# The sending window is checked in the campaign's own time zone (US: 09:30-16:30 Central time); runs outside it
+# do nothing. These slots cover US office hours. E-mails are spaced a few minutes apart, so each run takes up to
+# ~20 minutes: fine on a public repository (free minutes), too much for a private one (docs/SETUP.md).
+on:
+  schedule:
+    - cron: "41 14-21 * * 1-5"    # every hour 14:41-21:41 UTC = 09:41-16:41 Central (summer), Monday to Friday
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "dry-run (nothing is sent) or live (empty = config / OUTREACH_LIVE variable)"
+        default: ""
+      max_emails:
+        description: "Send at most this many e-mails in this run (testing; empty = normal pacing)"
+        default: ""
+      config:
+        description: "Campaign file (empty = repository variable OUTREACH_CONFIG, else config/us/outreach.toml)"
+        default: ""
+      maintainer_pubkey:
+        description: "Optional: base64 RSA public key - prints an ENCRYPTED copy of the e-mails sent (quality check)"
+        default: ""
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: outreach-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  outreach:
+    if: github.event_name == 'workflow_dispatch' || vars.OUTREACH_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      RQ_STATE_KEY: ${{ secrets.RQ_STATE_KEY }}
+      RQ_SHEET_ID: ${{ secrets.RQ_SHEET_ID }}
+      RQ_CONFIG: ${{ inputs.config || vars.OUTREACH_CONFIG || 'config/us/outreach.toml' }}
+      GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+      OUTREACH_GMAIL_ADDRESS: ${{ secrets.OUTREACH_GMAIL_ADDRESS }}
+      OUTREACH_GMAIL_APP_PASSWORD: ${{ secrets.OUTREACH_GMAIL_APP_PASSWORD }}
+      # Secrets, not variables: variables are printed in the logs.
+      OUTREACH_SENDER_PHONE: ${{ secrets.OUTREACH_SENDER_PHONE }}
+      OUTREACH_NOTIFY_EMAIL: ${{ secrets.OUTREACH_NOTIFY_EMAIL }}
+      OUTREACH_POSTAL_ADDRESS: ${{ secrets.OUTREACH_POSTAL_ADDRESS }}
+      OUTREACH_LIVE: ${{ vars.OUTREACH_LIVE }}
+      # The outreach memory is its own encrypted artifact, separate from the lead-generation memory.
+      STATE_DIR: outreach-state
+      DB_NAME: outreach.sqlite
+      RQ_OUTREACH_DB: outreach-state/outreach.sqlite
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: pip install -r requirements.txt
+      - name: Campaign
+        id: campaign
+        run: echo "id=$(python -c 'import os; from leadgen.config import load_config; print(load_config(os.environ["RQ_CONFIG"])["campaign"]["id"])')" >> "$GITHUB_OUTPUT"
+      - name: Restore outreach state
+        id: restore
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ART_NAME: rq-outreach-${{ steps.campaign.outputs.id }}
+        run: bash scripts/ci/state.sh restore
+      - name: Outreach run
+        run: |
+          args=(outreach)
+          if [ -n "${{ inputs.mode }}" ]; then args+=(--mode "${{ inputs.mode }}"); fi
+          if [ -n "${{ inputs.max_emails }}" ]; then args+=(--max-emails "${{ inputs.max_emails }}"); fi
+          OUTREACH_SENT_CSV="$RUNNER_TEMP/sent.csv" python -m leadgen "${args[@]}"
+      - name: Encrypted copy of the e-mails sent (maintainer check)
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.maintainer_pubkey != ''
+        env:
+          PUBKEY_B64: ${{ inputs.maintainer_pubkey }}
+        run: |
+          if [ -f "$RUNNER_TEMP/sent.csv" ]; then SAMPLE_CSV="$RUNNER_TEMP/sent.csv" bash scripts/ci/encrypted_sample.sh; else echo "no e-mails sent"; fi
+      - name: Save outreach state (encrypted)
+        if: always() && steps.restore.outcome == 'success'
+        run: bash scripts/ci/state.sh pack
+      - name: Upload encrypted state
+        if: always() && steps.restore.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: rq-outreach-${{ steps.campaign.outputs.id }}
+          path: state-out/rq-state.enc
+          retention-days: 30
+          if-no-files-found: ignore
+      - name: Delete older saved states (keep 3)
+        if: always() && steps.restore.outcome == 'success'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ART_NAME: rq-outreach-${{ steps.campaign.outputs.id }}
+        run: bash scripts/ci/state.sh prune

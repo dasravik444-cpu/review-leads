@@ -1,0 +1,16 @@
+{
+  "_comment": "One file per customer. 'id' becomes the page address /r/<id>/ printed in the QR code, so never change it after the stands are printed (every other field can change at any time).",
+  "id": "demo-cafe",
+  "name": "Café Luise (Demo)",
+  "country": "DE",
+  "timezone": "Europe/Berlin",
+  "languages": ["de", "en"],
+  "review_url": "https://g.page/r/CdemoExampleReviewId/review",
+  "menu_url": "",
+  "payment": {
+    "url": "https://paypal.me/demo-cafe-luise",
+    "label": "PayPal"
+  },
+  "brand_color": "#1f6f50",
+  "pay_note": ""
+}

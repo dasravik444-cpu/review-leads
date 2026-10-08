@@ -1,0 +1,154 @@
+name: US fleet (all cities in parallel)
+
+# Lead generation for every US city in config/us/fleet.toml at the same time: one GitHub job per city, each
+# with its own encrypted memory (rq-state-us-<city>), all writing into the same Google Sheet ("Leads" tab +
+# "Daily Report" tab). Runs by itself every day once the repository variable FLEET_ENABLED is "true".
+#
+# Public repository: free minutes, every city every day (up to 15 at a time, about 2.5 hours each).
+# Private repository: 2,000 minutes a month, so one city a day in turn for 25 minutes (docs/SETUP.md).
+# Manual run: Actions > US fleet > Run workflow (optionally name the cities, e.g. "austin,miami").
+on:
+  schedule:
+    - cron: "23 6 * * *"     # 06:23 UTC = night in the US: done before the US working day
+  workflow_dispatch:
+    inputs:
+      cities:
+        description: "Cities, comma-separated (empty = the fleet list; on a private repository: today's city)"
+        default: ""
+      budget_minutes:
+        description: "Work time per city in minutes (empty = 150 public / 25 private)"
+        default: ""
+      use_sheet:
+        description: "Write to the Google Sheet"
+        type: boolean
+        default: true
+      maintainer_pubkey:
+        description: "Optional: base64 RSA public key - prints an ENCRYPTED sample of leads for a quality check"
+        default: ""
+
+permissions:
+  contents: read
+  actions: write          # read the saved memories, delete older copies (storage is limited)
+
+concurrency:
+  group: fleet-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    if: github.event_name == 'workflow_dispatch' || vars.FLEET_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      parallel: ${{ steps.plan.outputs.parallel }}
+      budget: ${{ steps.plan.outputs.budget }}
+      private: ${{ steps.vis.outputs.private }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Repository visibility
+        id: vis
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          private=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}" | jq -r '.private')
+          echo "private=${private:-true}" >> "$GITHUB_OUTPUT"
+          echo "Repository is $([ "$private" = "false" ] && echo public || echo private)."
+      - name: Cities for this run
+        id: plan
+        run: python scripts/ci/fleet_matrix.py "${{ inputs.cities }}" "${{ steps.vis.outputs.private }}" "${{ inputs.budget_minutes }}" | tee -a "$GITHUB_OUTPUT"
+
+  city:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 200
+    strategy:
+      fail-fast: false
+      max-parallel: ${{ fromJSON(needs.plan.outputs.parallel) }}
+      matrix:
+        city: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    env:
+      RQ_STATE_KEY: ${{ secrets.RQ_STATE_KEY }}
+      RQ_SHEET_ID: ${{ secrets.RQ_SHEET_ID }}
+      RQ_CONFIG: config/us/${{ matrix.city }}.toml
+      GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+      PYTHONUNBUFFERED: "1"
+      # Without RQ_STATE_KEY nothing can be saved: each run then starts from scratch (fine for a first test).
+      PERSIST: ${{ secrets.RQ_STATE_KEY != '' }}
+      STATE_SLIM: "1"         # the open-data extract is downloaded again each run (seconds) instead of stored
+      KEEP: "2"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: |
+          pip install -r requirements.txt
+          pip install "duckdb>=1.1"
+      - name: Check configuration
+        id: campaign
+        run: |
+          python -m leadgen doctor --secrets-only
+          echo "id=$(python -c 'import os; from leadgen.config import load_config; print(load_config(os.environ["RQ_CONFIG"])["campaign"]["id"])')" >> "$GITHUB_OUTPUT"
+      - name: Restore this city's memory
+        id: restore
+        if: env.PERSIST == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ART_NAME: rq-state-${{ steps.campaign.outputs.id }}
+        run: bash scripts/ci/state.sh restore
+      - name: Find and enrich businesses
+        run: |
+          args=(run --budget-minutes "${{ needs.plan.outputs.budget }}")
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.use_sheet }}" != "true" ]; then args+=(--no-sheets); fi
+          python -m leadgen "${args[@]}"
+      - name: E-mail hunt (businesses still without an e-mail)
+        if: (success() || failure()) && (env.PERSIST != 'true' || steps.restore.outcome == 'success')
+        continue-on-error: true
+        run: |
+          args=(email-hunt --limit 600 --budget-minutes 15)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.use_sheet }}" != "true" ]; then args+=(--no-sheets); fi
+          python -m leadgen "${args[@]}"
+      - name: Encrypted lead sample (maintainer quality check)
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.maintainer_pubkey != ''
+        env:
+          PUBKEY_B64: ${{ inputs.maintainer_pubkey }}
+          SAMPLE_ROWS: "60"
+        run: bash scripts/ci/encrypted_sample.sh
+      - name: Lead list for download (private repository, no sheet yet)
+        if: always() && needs.plan.outputs.private == 'true' && (env.RQ_SHEET_ID == '' || (github.event_name == 'workflow_dispatch' && !inputs.use_sheet))
+        run: |
+          mkdir -p preview
+          python -m leadgen export-csv --db state/leadgen.sqlite --sheet-leads --out "preview/leads-${{ matrix.city }}.csv" || true
+      - name: Upload lead list (private repository only)
+        if: always() && needs.plan.outputs.private == 'true' && (env.RQ_SHEET_ID == '' || (github.event_name == 'workflow_dispatch' && !inputs.use_sheet))
+        uses: actions/upload-artifact@v4
+        with:
+          name: leads-${{ matrix.city }}
+          path: preview/
+          retention-days: 7
+          if-no-files-found: ignore
+      - name: Save this city's memory (encrypted)
+        if: always() && env.PERSIST == 'true' && steps.restore.outcome == 'success'
+        run: bash scripts/ci/state.sh pack
+      - name: Upload encrypted memory
+        if: always() && env.PERSIST == 'true' && steps.restore.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: rq-state-${{ steps.campaign.outputs.id }}
+          path: state-out/rq-state.enc
+          retention-days: 30
+          if-no-files-found: ignore
+      - name: Delete older copies (keep 2)
+        if: always() && env.PERSIST == 'true' && steps.restore.outcome == 'success'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ART_NAME: rq-state-${{ steps.campaign.outputs.id }}
+        run: bash scripts/ci/state.sh prune

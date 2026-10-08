@@ -1,0 +1,2 @@
+# The QR landing pages (site/build.py): QR codes as SVG. Pure Python.
+segno>=1.6

@@ -1,0 +1,63 @@
+# Example campaign: Auckland (New Zealand). Use with RQ_CONFIG = config/examples/newzealand-auckland.toml.
+#
+# New Zealand (Unsolicited Electronic Messages Act): e-mail only an address the business publishes itself, about its
+# business, with a working unsubscribe.
+
+include = ["../shared/categories.toml", "../shared/all-categories.toml"]
+
+[campaign]
+id = "review-newzealand-auckland"
+timezone = "Pacific/Auckland"
+country = "NZ"
+language = "en"
+region = "nz"
+lead_id_prefix = "AKL"
+
+[area]
+name = "Auckland"
+aliases = ["Auckland CBD", "North Shore", "Manukau"]
+center = [-36.8485, 174.7633]
+radius_km = 20
+
+[plan]
+days = 10
+daily_target = "auto"
+
+[compliance]
+mode = "open-data"
+
+[filters]
+exclude_chains = [
+  "hell pizza", "burger fuel", "burgerfuel", "burger king", "mcdonald", "kfc", "subway", "domino", "pizza hut",
+  "wendy's", "columbus coffee", "robert harris", "mojo coffee", "the coffee club", "muffin break", "starbucks",
+  "just cuts", "les mills", "snap fitness", "anytime fitness", "city fitness", "jetts", "quest", "novotel", "ibis"
+]
+
+[sheets]
+require_any = ["email", "whatsapp"]   # only businesses we can write to go into the sheet
+
+[runtime]
+time_budget_minutes = 30
+
+[outreach]
+mode = "dry-run"
+offer = "It's a one-time setup, no subscription."
+
+[outreach.sender]
+name = ""
+business = ""
+city = ""
+phone = ""
+postal_address = ""
+
+[outreach.email]
+window_start = "09:30"
+window_end = "16:30"
+days = ["mon", "tue", "wed", "thu", "fri"]
+
+[outreach.whatsapp]
+start_per_day = 5
+step = 5
+step_every_days = 7
+max_per_day = 20
+include_mobiles = false

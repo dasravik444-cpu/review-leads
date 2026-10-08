@@ -1,0 +1,14 @@
+# US outreach: ONE sender (your Gmail) for all US cities. It reads the shared "Leads" tab that the US fleet fills.
+# Used by the workflow "Outreach" when the repository variable OUTREACH_CONFIG = config/us/outreach.toml.
+# The lead-search settings below are only there because every campaign file needs them; the fleet does the search.
+include = ["../shared/categories.toml", "_base.toml"]
+
+[campaign]
+id = "us-outreach"
+timezone = "America/Chicago"      # e-mails go out 09:30-16:30 Central time (10:30-17:30 New York, 7:30-14:30 LA)
+lead_id_prefix = "US"
+
+[area]
+name = "United States"
+center = [39.83, -98.58]
+radius_km = 50

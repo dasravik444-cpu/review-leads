@@ -1,0 +1,65 @@
+# Example campaign: Toronto (Canada). Use with RQ_CONFIG = config/examples/canada-toronto.toml.
+#
+# Canada (CASL, docs/COMPLIANCE.md): e-mail only an address the business publishes itself, about its business, with your
+# name, mailing address and an unsubscribe in every message.
+
+include = ["../shared/categories.toml", "../shared/all-categories.toml"]
+
+[campaign]
+id = "review-canada-toronto"
+timezone = "America/Toronto"
+country = "CA"
+language = "en"
+region = "ca"
+lead_id_prefix = "TOR"
+
+[area]
+name = "Toronto"
+aliases = ["Toronto ON", "GTA", "Mississauga", "Scarborough", "North York"]
+center = [43.6532, -79.3832]
+radius_km = 25
+
+[plan]
+days = 10
+daily_target = "auto"
+
+[compliance]
+mode = "open-data"
+
+[filters]
+exclude_chains = [
+  "tim hortons", "mcdonald", "a&w", "harvey's", "swiss chalet", "boston pizza", "the keg", "earls", "cactus club",
+  "east side mario", "second cup", "starbucks", "subway", "pizza pizza", "pizza nova", "mary brown", "booster juice",
+  "first choice haircutters", "great clips", "goodlife fitness", "fit4less", "planet fitness", "anytime fitness",
+  "orangetheory", "holiday inn", "best western", "marriott", "hilton", "fairmont", "jiffy lube", "mr. lube",
+  "canadian tire", "petsmart", "petvalu", "shoppers drug mart"
+]
+
+[sheets]
+require_any = ["email", "whatsapp"]   # only businesses we can write to go into the sheet
+
+[runtime]
+time_budget_minutes = 30
+
+[outreach]
+mode = "dry-run"
+offer = "It's a one-time setup, no subscription."
+
+[outreach.sender]
+name = ""
+business = ""
+city = ""
+phone = ""
+postal_address = ""
+
+[outreach.email]
+window_start = "09:30"
+window_end = "16:30"
+days = ["mon", "tue", "wed", "thu", "fri"]
+
+[outreach.whatsapp]
+start_per_day = 5
+step = 5
+step_every_days = 7
+max_per_day = 20
+include_mobiles = false

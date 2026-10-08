@@ -1,0 +1,108 @@
+name: E-mail hunt (audit + backfill)
+
+# Manual: measures the e-mail coverage of the leads (aggregate numbers only) and, when asked, runs the
+# extra e-mail hunt over leads that still have no usable e-mail, then saves the campaign state and
+# updates the Google Sheet. Shares the campaign memory with "Daily lead generation" and never runs
+# at the same time as it.
+on:
+  workflow_dispatch:
+    inputs:
+      hunt_limit:
+        description: "Leads to hunt e-mails for (0 = audit only)"
+        default: "0"
+      budget_minutes:
+        description: "Time budget for the hunt in minutes"
+        default: "60"
+      persist_state:
+        description: "Save the campaign memory and update the Google Sheet afterwards"
+        type: boolean
+        default: false
+      maintainer_pubkey:
+        description: "Optional: base64 RSA public key - prints an ENCRYPTED sample for a quality check"
+        default: ""
+      sample_without_email:
+        description: "Sample only leads that still have no e-mail"
+        type: boolean
+        default: true
+      config:
+        description: "Campaign file (empty = repository variable RQ_CONFIG or config/us/austin.toml)"
+        default: ""
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: leadgen-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  hunt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      RQ_CONFIG: ${{ inputs.config || vars.RQ_CONFIG || 'config/us/austin.toml' }}
+      RQ_STATE_KEY: ${{ secrets.RQ_STATE_KEY }}
+      RQ_SHEET_ID: ${{ secrets.RQ_SHEET_ID }}
+      GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: |
+          pip install -r requirements.txt
+          pip install "curl_cffi>=0.7" || echo "curl_cffi unavailable - falling back to requests"
+      - name: Campaign
+        id: campaign
+        run: echo "id=$(python -c 'import os; from leadgen.config import load_config; print(load_config(os.environ["RQ_CONFIG"])["campaign"]["id"])')" >> "$GITHUB_OUTPUT"
+      - name: Restore campaign state
+        id: restore
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ART_NAME: rq-state-${{ steps.campaign.outputs.id }}
+        run: bash scripts/ci/state.sh restore
+      - name: Audit before
+        run: python -m leadgen email-audit --json audit-before.json
+      - name: Hunt e-mails
+        if: inputs.hunt_limit != '0' && inputs.hunt_limit != ''
+        run: |
+          args=(email-hunt --force --limit "${{ inputs.hunt_limit }}" --budget-minutes "${{ inputs.budget_minutes }}" --detail-csv "$RUNNER_TEMP/hunt-detail.csv")
+          if [ "${{ inputs.persist_state }}" != "true" ]; then args+=(--no-sheets); fi
+          python -m leadgen "${args[@]}"
+      - name: Audit after
+        if: inputs.hunt_limit != '0' && inputs.hunt_limit != ''
+        run: python -m leadgen email-audit --json audit-after.json
+      - name: Encrypted sample (maintainer quality check)
+        if: always() && inputs.maintainer_pubkey != ''
+        env:
+          PUBKEY_B64: ${{ inputs.maintainer_pubkey }}
+          SAMPLE_WITHOUT_EMAIL: ${{ inputs.sample_without_email && '1' || '' }}
+          SAMPLE_ROWS: "400"
+        run: |
+          # After a hunt: the per-lead hunt results (to check every e-mail it kept by hand).
+          if [ -f "$RUNNER_TEMP/hunt-detail.csv" ]; then export SAMPLE_CSV="$RUNNER_TEMP/hunt-detail.csv"; fi
+          bash scripts/ci/encrypted_sample.sh
+      - name: Save campaign state (encrypted)
+        if: always() && inputs.persist_state && steps.restore.outcome == 'success'
+        run: bash scripts/ci/state.sh pack
+      - name: Upload encrypted state
+        if: always() && inputs.persist_state && steps.restore.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: rq-state-${{ steps.campaign.outputs.id }}
+          path: state-out/rq-state.enc
+          retention-days: 30
+          if-no-files-found: ignore
+      - name: Delete older saved states (keep 3)
+        if: always() && inputs.persist_state && steps.restore.outcome == 'success'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ART_NAME: rq-state-${{ steps.campaign.outputs.id }}
+        run: bash scripts/ci/state.sh prune

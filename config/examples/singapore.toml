@@ -1,0 +1,63 @@
+# Example campaign: Singapore (Singapore). Use with RQ_CONFIG = config/examples/singapore.toml.
+#
+# Singapore (Spam Control Act): unsolicited commercial e-mail starts its subject with <ADV> (added automatically) and
+# carries an unsubscribe.
+
+include = ["../shared/categories.toml", "../shared/all-categories.toml"]
+
+[campaign]
+id = "review-singapore"
+timezone = "Asia/Singapore"
+country = "SG"
+language = "en"
+region = "sg"
+lead_id_prefix = "SGP"
+
+[area]
+name = "Singapore"
+aliases = ["Singapore City", "Orchard", "Tampines", "Jurong"]
+center = [1.3521, 103.8198]
+radius_km = 20
+
+[plan]
+days = 10
+daily_target = "auto"
+
+[compliance]
+mode = "open-data"
+
+[filters]
+exclude_chains = [
+  "mcdonald", "kfc", "burger king", "subway", "starbucks", "toast box", "ya kun", "coffee bean", "old chang kee",
+  "mos burger", "jollibee", "din tai fung", "crystal jade", "paradise group", "anytime fitness", "fitness first",
+  "true fitness", "pure fitness", "marriott", "hilton", "fragrance hotel", "hotel 81"
+]
+
+[sheets]
+require_any = ["email", "whatsapp"]   # only businesses we can write to go into the sheet
+
+[runtime]
+time_budget_minutes = 30
+
+[outreach]
+mode = "dry-run"
+offer = "It's a one-time setup, no subscription."
+
+[outreach.sender]
+name = ""
+business = ""
+city = ""
+phone = ""
+postal_address = ""
+
+[outreach.email]
+window_start = "09:30"
+window_end = "17:00"
+days = ["mon", "tue", "wed", "thu", "fri"]
+
+[outreach.whatsapp]
+start_per_day = 5
+step = 5
+step_every_days = 7
+max_per_day = 20
+include_mobiles = false

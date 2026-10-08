@@ -1,0 +1,165 @@
+# Business categories for the review business, shared by every campaign (include = ["shared/categories.toml"]).
+#
+# Who buys a review system: places with many customers a day, whose customers choose them by Google rating
+# and by how recent the reviews are. A campaign can switch a category off (enabled = false) or change its
+# search words by listing the same key in its own file.
+#
+#   overture  category codes in the Overture Maps open data (default "open-data" mode). Codes that do not
+#             exist simply match nothing; check them with Actions > "Open data coverage probe" (mode taxonomy).
+#   osm       OpenStreetMap tags (fallback when the open data cannot be read)
+#   queries   search words (only used in "standard" mode, which searches Google Maps)
+#   match     words checked against Google's category labels (standard mode)
+
+[[categories]]
+key = "restaurant"
+label = "Restaurant"
+queries = ["restaurant"]
+match = ["restaurant", "dining", "eatery", "grill", "pizzeria", "steakhouse", "bistro", "brasserie", "trattoria", "diner",
+         "kitchen", "sushi", "ramen", "taqueria", "burger", "kebab", "doner", "falafel", "noodle", "curry", "tapas",
+         "fast food", "takeaway"]
+osm = ['["amenity"="restaurant"]', '["amenity"="fast_food"]']
+overture = ["restaurant", "*_restaurant", "fast_food_restaurant", "casual_eatery", "diner", "steakhouse", "bistro",
+            "brasserie", "food_truck", "food_truck_stand", "kebab_shop", "pizza_restaurant", "burger_restaurant",
+            "sandwich_shop", "pizza_delivery_service"]
+
+[[categories]]
+key = "cafe"
+label = "Cafe"
+queries = ["cafe", "coffee shop"]
+match = ["cafe", "café", "coffee", "tea house", "tea room", "espresso", "roastery", "bubble tea", "juice", "breakfast",
+         "brunch", "creperie"]
+osm = ['["amenity"="cafe"]']
+overture = ["cafe", "coffee_shop", "tea_room", "bubble_tea_shop", "smoothie_juice_bar", "breakfast_and_brunch_restaurant",
+            "coffee_roastery", "creperie"]
+
+[[categories]]
+key = "bar"
+label = "Bar / Pub"
+queries = ["bar", "pub"]
+match = ["bar", "pub", "tavern", "brewery", "brewpub", "beer garden", "wine bar", "cocktail", "lounge", "gastropub"]
+osm = ['["amenity"="bar"]', '["amenity"="pub"]', '["amenity"="biergarten"]']
+overture = ["bar", "pub", "lounge", "cocktail_bar", "wine_bar", "beer_bar", "beer_garden", "sports_bar", "brewery",
+            "gastropub", "irish_pub", "tapas_bar", "speakeasy", "whiskey_bar", "hookah_bar", "dance_club"]
+
+[[categories]]
+key = "bakery"
+label = "Bakery / Ice cream"
+queries = ["bakery", "ice cream"]
+match = ["bakery", "baker", "patisserie", "pastry", "cake", "donut", "doughnut", "ice cream", "gelato", "frozen yogurt",
+         "dessert", "chocolatier", "confectionery"]
+osm = ['["shop"="bakery"]', '["shop"="pastry"]', '["amenity"="ice_cream"]', '["shop"="confectionery"]']
+overture = ["bakery", "patisserie_cake_shop", "cake_shop", "donut_shop", "ice_cream_shop", "frozen_yoghurt_shop",
+            "gelato", "dessert_shop", "chocolatier", "candy_store", "cupcake_shop"]
+
+[[categories]]
+key = "salon"
+label = "Hair / Beauty / Barber"
+queries = ["hair salon", "barber", "beauty salon"]
+match = ["salon", "hair", "barber", "beauty", "nail", "spa", "lash", "brow", "cosmetic", "massage", "waxing", "tanning",
+         "makeup", "make-up"]
+osm = ['["shop"="hairdresser"]', '["shop"="beauty"]', '["leisure"="spa"]', '["shop"="massage"]']
+overture = ["hair_salon", "hair_stylist", "barber", "beauty_salon", "nail_salon", "spa", "day_spa", "massage",
+            "massage_therapy", "beauty_and_spa", "eyelash_service", "eyebrow_service", "waxing", "tanning_salon",
+            "skin_care", "skin_care_and_makeup", "makeup_artist", "hair_removal"]
+
+[[categories]]
+key = "gym"
+label = "Gym / Fitness studio"
+queries = ["gym", "fitness studio"]
+match = ["gym", "fitness", "yoga", "pilates", "crossfit", "boxing", "martial art", "dance studio", "personal trainer",
+         "cycling studio", "climbing"]
+osm = ['["leisure"="fitness_centre"]', '["leisure"="sports_centre"]']
+# "fitness_studio" is a broad Overture group (yoga, pilates, barre...). The other broad group,
+# "sport_or_fitness_facility", is left out on purpose: it also holds public sports grounds and pools.
+overture = ["gym", "fitness_center", "fitness_studio", "yoga_studio", "pilates_studio", "boxing_gym", "boxing_class",
+            "martial_arts_club", "dance_studio", "cycling_classes", "climbing_gym", "personal_trainer", "fitness_trainer",
+            "boot_camp"]
+
+[[categories]]
+key = "hotel"
+label = "Hotel / Guesthouse"
+enabled = false   # switch on for tourist areas
+queries = ["hotel", "guest house"]
+match = ["hotel", "guest house", "guesthouse", "bed and breakfast", "b&b", "inn", "hostel", "motel", "pension", "lodge"]
+osm = ['["tourism"="hotel"]', '["tourism"="guest_house"]', '["tourism"="hostel"]', '["tourism"="motel"]']
+overture = ["hotel", "guest_house", "bed_and_breakfast", "hostel", "motel", "inn", "lodge", "resort"]
+
+[[categories]]
+key = "dental"
+label = "Dental practice"
+enabled = false   # health care has its own rules on advertising and on replying to patients - read docs/COMPLIANCE.md first
+queries = ["dentist"]
+match = ["dentist", "dental", "orthodontist"]
+osm = ['["amenity"="dentist"]', '["healthcare"="dentist"]']
+overture = ["dental_clinic", "dentist", "general_dentistry", "cosmetic_dentistry", "orthodontics", "pediatric_dentistry"]
+
+[[categories]]
+key = "auto"
+label = "Garage / Car wash"
+enabled = false
+queries = ["car repair", "car wash"]
+match = ["car repair", "auto repair", "garage", "mechanic", "car wash", "detailing", "tyre", "tire", "body shop"]
+osm = ['["shop"="car_repair"]', '["amenity"="car_wash"]', '["shop"="tyres"]']
+overture = ["automotive_repair", "auto_body_shop", "car_wash", "auto_detailing", "tire_dealer_and_repair", "tire_shop",
+            "oil_change_station", "auto_glass_service"]
+
+# --- More walk-in businesses that live on reviews (off by default; the US campaigns switch them on) -----------
+
+[[categories]]
+key = "health"
+label = "Clinic / Med spa / Chiropractor"
+enabled = false   # health care: ask every patient the same way, never reply with patient details (docs/COMPLIANCE.md)
+queries = ["chiropractor", "med spa"]
+match = ["chiropract", "med spa", "medspa", "medical spa", "physical therap", "physiotherap", "acupunct", "optometr",
+         "eye care", "naturopath", "weight loss", "plastic surg", "cosmetic surg"]
+osm = ['["healthcare"="chiropractor"]', '["healthcare"="physiotherapist"]', '["healthcare"="optometrist"]']
+overture = ["chiropractic", "medical_spa", "physical_therapy", "acupuncture", "optometry", "naturopathic_medicine",
+            "weight_loss_center", "plastic_and_reconstructive_surgery"]
+
+[[categories]]
+key = "pets"
+label = "Pet groomer / Vet"
+enabled = false
+queries = ["pet groomer", "veterinarian"]
+match = ["pet", "groom", "veterinar", "animal hospital", "animal clinic", "dog", "cat ", "kennel"]
+osm = ['["amenity"="veterinary"]', '["shop"="pet_grooming"]']
+overture = ["veterinarian", "pet_groomer", "animal_or_pet_service", "pet_boarding", "dog_trainer", "pet_sitting",
+            "animal_hospital"]
+
+[[categories]]
+key = "tattoo"
+label = "Tattoo / Piercing"
+enabled = false
+queries = ["tattoo shop"]
+match = ["tattoo", "piercing"]
+osm = ['["shop"="tattoo"]']
+overture = ["tattoo_and_piercing", "tattoo", "piercing"]
+
+[[categories]]
+key = "entertainment"
+label = "Entertainment venue"
+enabled = false
+queries = ["bowling", "escape room"]
+match = ["bowling", "arcade", "escape", "trampoline", "mini golf", "karaoke", "laser tag", "go kart", "go-kart",
+         "axe throwing", "billiard", "music venue"]
+osm = ['["leisure"="bowling_alley"]', '["leisure"="escape_game"]', '["leisure"="amusement_arcade"]']
+overture = ["bowling_alley", "arcade", "escape_rooms", "escape_room", "trampoline_park", "mini_golf_course", "mini_golf",
+            "karaoke", "laser_tag", "go_kart_track", "go_kart_racing", "axe_throwing", "pool_hall", "music_venue"]
+
+[[categories]]
+key = "retail"
+label = "Boutique / Florist / Gift shop"
+enabled = false
+queries = ["boutique", "florist"]
+match = ["boutique", "florist", "flower", "gift", "bookstore", "book shop", "jewel"]
+osm = ['["shop"="florist"]', '["shop"="gift"]', '["shop"="boutique"]', '["shop"="jewelry"]']
+overture = ["fashion_boutique", "florist", "flowers_and_gifts_store", "gift_shop", "bookstore", "jewelry_store"]
+
+[[categories]]
+key = "laundry"
+label = "Laundromat / Dry cleaner"
+enabled = false
+queries = ["laundromat", "dry cleaner"]
+match = ["laundromat", "laundry", "dry clean", "wash and fold", "wash & fold"]
+osm = ['["shop"="laundry"]', '["shop"="dry_cleaning"]']
+overture = ["laundromat", "dry_cleaning", "laundry_service"]

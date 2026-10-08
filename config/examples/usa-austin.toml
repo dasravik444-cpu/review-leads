@@ -1,0 +1,71 @@
+# Example campaign: Austin, Texas (USA). To run it instead of Berlin, set the repository variable
+# RQ_CONFIG = config/examples/usa-austin.toml and give it its own Google Sheet (RQ_SHEET_ID).
+#
+# US rules (docs/COMPLIANCE.md): cold B2B e-mail is allowed under CAN-SPAM if every e-mail has a truthful
+# sender and subject, YOUR POSTAL ADDRESS and a working opt-out honoured within 10 business days. No cold
+# texts/WhatsApp (TCPA): those only for people who said yes.
+
+include = ["../shared/categories.toml"]
+
+[campaign]
+id = "review-us-austin"
+timezone = "America/Chicago"
+country = "US"
+language = "en"
+region = "us"
+lead_id_prefix = "US"
+
+[area]
+name = "Austin"
+aliases = ["ATX"]
+center = [30.2672, -97.7431]
+radius_km = 25
+
+[plan]
+days = 30
+daily_target = "auto"
+max_cell_km = 8.0
+
+[compliance]
+mode = "open-data"
+
+[open_data]
+min_confidence = 0.5
+
+[filters]
+exclude_chains = [
+  "mcdonald", "starbucks", "chick-fil-a", "taco bell", "wendy's", "burger king", "subway", "chipotle", "panera",
+  "dunkin", "domino", "pizza hut", "papa john", "sonic drive", "whataburger", "jack in the box", "in-n-out",
+  "five guys", "shake shack", "olive garden", "applebee", "chili's", "ihop", "denny's", "waffle house",
+  "buffalo wild wings", "cheesecake factory", "texas roadhouse", "outback", "red lobster", "p.f. chang",
+  "panda express", "raising cane", "torchy's", "sweetgreen", "cava", "dutch bros", "peet's", "tim hortons",
+  "krispy kreme", "great clips", "supercuts", "sport clips", "fantastic sams", "planet fitness", "la fitness",
+  "anytime fitness", "24 hour fitness", "orangetheory", "gold's gym", "crunch fitness", "european wax center",
+]
+
+[runtime]
+time_budget_minutes = 30
+
+[outreach]
+mode = "dry-run"
+offer = "It's a one-time setup, no subscription."
+
+[outreach.sender]
+name = ""
+business = ""
+city = ""
+phone = ""               # secret OUTREACH_SENDER_PHONE
+postal_address = ""      # REQUIRED by CAN-SPAM: secret OUTREACH_POSTAL_ADDRESS
+
+[outreach.email]
+start_per_day = 15
+step = 5
+step_every_days = 3
+max_per_day = 40
+window_start = "09:30"
+window_end = "16:30"
+days = ["tue", "wed", "thu"]
+follow_up_days = [3, 7]
+
+[outreach.whatsapp]
+include_mobiles = false

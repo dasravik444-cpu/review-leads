@@ -1,0 +1,64 @@
+# Example campaign: Manchester (United Kingdom). Use with RQ_CONFIG = config/examples/uk-manchester.toml.
+#
+# UK rules (docs/COMPLIANCE.md): limited companies (Ltd/LLP/PLC) may be e-mailed without consent if you say
+# who you are and offer an opt-out; sole traders and partnerships need consent, so they get a letter
+# instead. Every first e-mail says where the address came from (UK GDPR Art. 14).
+
+include = ["../shared/categories.toml"]
+
+[campaign]
+id = "review-uk-manchester"
+timezone = "Europe/London"
+country = "GB"
+language = "en"
+region = "uk"
+lead_id_prefix = "UK"
+
+[area]
+name = "Manchester"
+aliases = ["Salford"]
+center = [53.4808, -2.2426]
+radius_km = 15
+
+[plan]
+days = 30
+daily_target = "auto"
+
+[compliance]
+mode = "open-data"
+
+[filters]
+exclude_chains = [
+  "mcdonald", "kfc", "burger king", "subway", "greggs", "costa", "starbucks", "caffe nero", "caffè nero", "pret",
+  "nando", "wagamama", "pizza express", "pizzaexpress", "zizzi", "ask italian", "prezzo", "frankie & benny",
+  "harvester", "toby carvery", "wetherspoon", "all bar one", "slug and lettuce", "browns", "miller & carter",
+  "five guys", "leon", "itsu", "wasabi", "tortilla", "gourmet burger kitchen", "honest burgers", "pizza hut",
+  "domino", "papa john", "toni&guy", "toni & guy", "rush hair", "headmasters", "puregym", "pure gym",
+  "the gym group", "anytime fitness", "david lloyd", "nuffield health", "virgin active", "bannatyne",
+]
+
+[runtime]
+time_budget_minutes = 30
+
+[outreach]
+mode = "dry-run"
+offer = "It's a one-time setup, no subscription."
+
+[outreach.sender]
+name = ""
+business = ""
+city = ""
+phone = ""
+postal_address = ""
+
+[outreach.email]
+window_start = "10:00"
+window_end = "16:30"
+days = ["tue", "wed", "thu"]
+
+[outreach.whatsapp]
+include_mobiles = false
+
+[outreach.letters]
+enabled = "auto"         # UK: letters for sole traders (they may not be e-mailed without consent)
+per_day = 10

@@ -1,0 +1,16 @@
+{
+  "_comment": "Your business details (the operator of the pages). They appear in the Impressum/privacy pages that German law requires, and in the preview page's WhatsApp button. Replace every FILL_IN before going live; the build refuses to publish with FILL_IN left (except with --preview).",
+  "base_url": "https://FILL_IN.workers.dev",
+  "brand": "FILL_IN (your business name)",
+  "operator": {
+    "name": "FILL_IN (your full name)",
+    "street": "FILL_IN (street and number)",
+    "city": "FILL_IN (postcode and city)",
+    "country": "India",
+    "email": "FILL_IN (the new business Gmail)",
+    "phone": "FILL_IN (+91 ...)"
+  },
+  "whatsapp": "FILL_IN (+91 ..., the WhatsApp Business number)",
+  "hosting": "Cloudflare, Inc., USA (Cloudflare Workers; EU-U.S. Data Privacy Framework)",
+  "default_language": "en"
+}

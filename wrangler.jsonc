@@ -1,0 +1,9 @@
+// Cloudflare Workers settings for the customer pages (built by site/build.py into site/public).
+// "name" must be the Worker's name in the Cloudflare dashboard.
+{
+  "name": "review-leads",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "./site/public"
+  }
+}

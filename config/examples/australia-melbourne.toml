@@ -1,0 +1,60 @@
+# Example campaign: Melbourne (Australia). Use with RQ_CONFIG = config/examples/australia-melbourne.toml.
+#
+# Australian rules (docs/COMPLIANCE.md): the Spam Act lets consent be inferred from a business e-mail address
+# it published itself, when the message relates to its business and no "no unsolicited e-mail" notice is
+# published. Every e-mail must identify you and carry an unsubscribe. Guessed addresses are never used.
+
+include = ["../shared/categories.toml"]
+
+[campaign]
+id = "review-au-melbourne"
+timezone = "Australia/Melbourne"
+country = "AU"
+language = "en"
+region = "au"
+lead_id_prefix = "AU"
+
+[area]
+name = "Melbourne"
+aliases = ["Melb"]
+center = [-37.8136, 144.9631]
+radius_km = 20
+
+[plan]
+days = 30
+daily_target = "auto"
+
+[compliance]
+mode = "open-data"
+
+[filters]
+exclude_chains = [
+  "mcdonald", "hungry jack", "kfc", "subway", "domino", "pizza hut", "red rooster", "oporto", "guzman y gomez",
+  "grill'd", "nando", "zambrero", "schnitz", "gloria jean", "michel's patisserie", "the coffee club",
+  "muffin break", "starbucks", "boost juice", "chatime", "roll'd", "betty's burgers", "mad mex", "crust pizza",
+  "el jannah", "just cuts", "anytime fitness", "snap fitness", "f45", "goodlife health", "fitness first", "jetts",
+  "plus fitness", "9round",
+]
+
+[runtime]
+time_budget_minutes = 30
+
+[outreach]
+mode = "dry-run"
+offer = "It's a one-time setup, no subscription."
+
+[outreach.sender]
+name = ""
+business = ""
+city = ""
+phone = ""
+postal_address = ""
+
+[outreach.email]
+include_unverified = false
+window_start = "09:30"
+window_end = "16:30"
+days = ["tue", "wed", "thu"]
+
+[outreach.whatsapp]
+include_mobiles = false
