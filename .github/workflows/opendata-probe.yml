@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "coverage | taxonomy | codes | config | lookup"
+        description: "coverage | taxonomy | codes | config | lookup | emailsources"
         default: "coverage"
       config:
         description: "Campaign file (empty = repository variable RQ_CONFIG or config/us/austin.toml)"

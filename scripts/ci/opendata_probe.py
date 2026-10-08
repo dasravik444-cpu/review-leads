@@ -233,7 +233,47 @@ def overture_lookup(cfg):
             f"AND basic_category = 'event_or_party_service' GROUP BY 1 ORDER BY 2 DESC LIMIT 30", "codes under basic event_or_party_service")
 
 
+def email_sources(cfg):
+    """Can GitHub's machines use the extra e-mail sources (Common Crawl archive, web search)? Counts only."""
+    from leadgen.config import BOT_NAME, BOT_UA
+    from leadgen.enrich.archive import ArchivedSite, CommonCrawl
+    from leadgen.enrich.email_search import search_emails
+    from leadgen.enrich.extract import host_of, registrable
+    from leadgen.enrich.search import WebSearch
+    from leadgen.enrich.website import crawl_site
+    from leadgen.net import Http
+
+    region, city = cfg["campaign"]["country"], cfg["area"]["name"].split(",")[0]
+    sites = [("Franklin Barbecue", "https://franklinbbq.com/"), ("Leroy and Lewis Barbecue", "https://leroyandlewis.com/"),
+             ("Radio Coffee & Beer", "https://radiocoffeeandbeer.com/"), ("Veracruz All Natural", "https://veracruzallnatural.com/"),
+             ("Juan in a Million", "https://juaninamillion.com/")]
+    cc = CommonCrawl(Http(use_curl_cffi=False, default_interval=2.0, user_agent=BOT_UA, robot_name=BOT_NAME))
+    print("Common Crawl crawls:", cc.crawl_ids())
+    for name, url in sites:
+        try:
+            caps = cc.captures(registrable(host_of(url)))
+            res = crawl_site(ArchivedSite(cc, caps, url), url, name, max_pages=8, region=region, interval=0.0,
+                             deep=True) if caps else None
+            n = sum(1 for c in res.contacts if c.kind == "email" and c.confidence != "low") if res else 0
+            print(f"archive | {name}: {len(caps)} pages archived, read {res.status if res else '-'}, owned "
+                  f"{res.owned if res else '-'}, e-mails tied to it: {n}")
+        except Exception as exc:  # noqa: BLE001
+            print(f"archive | {name}: {type(exc).__name__}: {exc}"[:300])
+    print("archive stats:", dict(cc.stats), "lookups", cc.lookups)
+    ws = WebSearch(Http(use_curl_cffi=False, default_interval=4.5), interval=4.5, region=region)
+    for name, _ in sites + [("Kerbey Lane Cafe", ""), ("Bouldin Creek Cafe", ""), ("Mozart's Coffee Roasters", "")]:
+        try:
+            found = search_emails(ws, name, city, [], "", region)
+            print(f"search | {name}: e-mails tied to it: {len(found)} " + str(sorted({t for _, _, t in found.values()})))
+        except Exception as exc:  # noqa: BLE001
+            print(f"search | {name}: {type(exc).__name__}: {exc}"[:300])
+    print("search engine stats:", {k: v for k, v in ws.stats.items() if any(v.values())})
+
+
 if __name__ == "__main__":
+    if len(sys.argv) > 2 and sys.argv[2] == "emailsources":
+        email_sources(load_config(sys.argv[1]))
+        sys.exit(0)
     if len(sys.argv) > 2 and sys.argv[2] == "config":
         overture_config(load_config(sys.argv[1]))
         sys.exit(0)
