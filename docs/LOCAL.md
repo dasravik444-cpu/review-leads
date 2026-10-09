@@ -22,11 +22,14 @@ robot runs exactly as on a computer.
 and press Enter:
 
 ```
-pkg install -y curl && curl -fsSL https://raw.githubusercontent.com/dasravik444-cpu/review-leads/main/android/setup.sh | bash
+curl -fsSL https://raw.githubusercontent.com/dasravik444-cpu/review-leads/main/android/setup.sh | bash
 ```
 
-When Android asks whether Termux may access files, tap **Allow**. Wait 10-15 minutes until it says
-**Done**. (If it stops with a question, press Enter.)
+When Android asks whether Termux may access files, tap **Allow**. Wait 10-20 minutes until it says
+**Done**. (If it stops with a question, press Enter. If it stops with an error, for example because the internet
+dropped for a moment, paste the same line again: it carries on from where it stopped.) It downloads from Termux's
+own server, installs only what the robot needs, and puts the robot in its own small Ubuntu named `review-leads`:
+anything else you have in Termux stays as it is.
 
 **Step 3 – Your Google key file.** It is the `.json` file you downloaded from Google Cloud during setup, in the
 tablet's Download folder. (No longer there? Download a new one: [console.cloud.google.com](https://console.cloud.google.com)

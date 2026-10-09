@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# Helpers for the Android commands (android/setup.sh). They run inside Ubuntu, in the robot's folder.
-cd "$(dirname "$0")/.."
-case "$1" in
+# The Android commands (made by android/setup.sh) run this inside the Ubuntu in Termux:  inside.sh COMMAND [options]
+cd "$(dirname "$0")/.." || exit 1
+cmd=$1
+shift
+case "$cmd" in
   getkey)
     # The Google key file you downloaded on the tablet is in its Download folder (any name; only the
     # service-account key is used, other .json files are ignored).
@@ -20,7 +22,16 @@ case "$1" in
     [ -f settings.txt ] || cp settings-example.txt settings.txt
     nano settings.txt
     ;;
+  check|leads|emails)
+    bash android/dns.sh
+    exec bash "run_$cmd.sh" "$@"
+    ;;
+  update)
+    bash android/dns.sh
+    git pull --ff-only
+    ;;
   *)
-    echo "usage: inside.sh getkey|settings"
+    echo "usage: inside.sh getkey|settings|check|leads|emails|update"
+    exit 2
     ;;
 esac
