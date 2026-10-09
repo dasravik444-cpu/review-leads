@@ -79,6 +79,23 @@ def load_credentials():
     raise SheetsError("no Google service-account key configured (set GOOGLE_SERVICE_ACCOUNT_JSON or GOOGLE_SERVICE_ACCOUNT_FILE)")
 
 
+def key_email() -> str:
+    """The e-mail address of the configured service-account key: the address the Sheet must be shared with."""
+    raw = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON", "").strip()
+    path = os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE") or os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+    try:
+        if raw:
+            info = json.loads(raw)
+        elif path and os.path.exists(path):
+            with open(path, encoding="utf-8-sig") as fh:
+                info = json.load(fh)
+        else:
+            return ""
+    except (OSError, ValueError):
+        return ""
+    return str(info.get("client_email") or "") if isinstance(info, dict) else ""
+
+
 class SheetsClient:
     def __init__(self, spreadsheet_id: str, credentials=None, session=None):
         if not spreadsheet_id:
@@ -87,7 +104,9 @@ class SheetsClient:
         if session is None:
             from google.auth.transport.requests import AuthorizedSession
 
-            session = AuthorizedSession(credentials or load_credentials())
+            credentials = credentials or load_credentials()
+            session = AuthorizedSession(credentials)
+        self.email = getattr(credentials, "service_account_email", "") or ""
         self.s = session
         self.calls = 0
 
@@ -108,14 +127,20 @@ class SheetsClient:
                 delay *= 2
                 continue
             if r.status_code >= 400:
-                msg = r.text[:400]
-                if r.status_code == 403:
-                    msg += " -- share the spreadsheet with the service-account email as Editor"
-                if r.status_code == 404:
-                    msg += " -- check RQ_SHEET_ID"
-                raise SheetsError(f"Sheets API HTTP {r.status_code}: {msg}")
+                raise SheetsError(f"Sheets API HTTP {r.status_code}: {_error_text(r)}{self._hint(r)}")
             return r.json() if r.content else {}
         raise SheetsError("Sheets API retries exhausted")
+
+    def _hint(self, r) -> str:
+        if r.status_code == 404:
+            return " -- check RQ_SHEET_ID"
+        if r.status_code != 403:
+            return ""
+        if "disabled" in r.text or "has not been used" in r.text:
+            return " -- turn on the Google Sheets API in the key's Google Cloud project (link above)"
+        who = self.email or "the service-account e-mail address"
+        return (f" -- in the Sheet click Share and add {who} as Editor (or check that RQ_SHEET_ID is the right "
+                "Sheet and the key in the secrets folder is this business's key)")
 
     def metadata(self) -> dict:
         return self._req("GET", f"{API}/{self.sid}", params={"fields": "properties.title,sheets.properties(sheetId,title,gridProperties)"})
@@ -149,6 +174,14 @@ class SheetsClient:
 
     def clear(self, rng: str) -> dict:
         return self._req("POST", f"{API}/{self.sid}/values/{_q(rng)}:clear", json={})
+
+
+def _error_text(r) -> str:
+    """Google's own error message, without the JSON around it."""
+    try:
+        return str(r.json()["error"]["message"])[:300]
+    except Exception:  # noqa: BLE001 - not the usual JSON error
+        return r.text[:400]
 
 
 def _q(rng: str) -> str:

@@ -31,23 +31,53 @@ KEYS = ("RQ_SHEET_ID", "GOOGLE_SERVICE_ACCOUNT_FILE", "OUTREACH_GMAIL_ADDRESS", 
         "OUTREACH_SENDER_PHONE", "OUTREACH_POSTAL_ADDRESS")
 
 
+def key_email(path: Path) -> str:
+    """The account a Google service-account key file belongs to (empty for any other file)."""
+    try:
+        data = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError):
+        return ""
+    if isinstance(data, dict) and data.get("type") == "service_account":
+        return str(data.get("client_email") or "")
+    return ""
+
+
+def key_files() -> list[Path]:
+    """The Google service-account key files (.json, any name) in the secrets folder and the main folder."""
+    return [p for folder in (ROOT / "secrets", ROOT) for p in sorted(folder.glob("*.json")) if key_email(p)]
+
+
+def opens_sheet(key: Path, sheet_id: str) -> bool:
+    """Whether this key may open the Sheet (one small request to Google)."""
+    try:
+        from google.auth.transport.requests import AuthorizedSession
+        from google.oauth2 import service_account
+
+        creds = service_account.Credentials.from_service_account_file(
+            str(key), scopes=["https://www.googleapis.com/auth/spreadsheets"])
+        r = AuthorizedSession(creds).get(f"https://sheets.googleapis.com/v4/spreadsheets/{sheet_id}",
+                                         params={"fields": "spreadsheetId"}, timeout=30)
+        return r.status_code == 200
+    except Exception:  # noqa: BLE001 - no internet, a damaged key: not this one
+        return False
+
+
 def find_key_file() -> str:
-    """The Google service-account key: the file named in the settings, else any service-account .json file in the
-    secrets folder or the main folder (so it needs no renaming)."""
+    """The Google service-account key: the file named in the settings, else the key file in the secrets folder or
+    the main folder (any name). With several (say, the key of another business too), the one that may open the
+    Sheet."""
     named = os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE", "")
     if named:
         p = Path(named) if Path(named).is_absolute() else ROOT / named
         if p.is_file():
             return str(p)
-    for folder in (ROOT / "secrets", ROOT):
-        for p in sorted(folder.glob("*.json")):
-            try:
-                data = json.loads(p.read_text(encoding="utf-8-sig"))
-            except (OSError, ValueError):
-                continue
-            if isinstance(data, dict) and data.get("type") == "service_account" and data.get("client_email"):
-                return str(p)
-    return ""
+    keys = key_files()
+    sheet = os.environ.get("RQ_SHEET_ID", "")
+    if len(keys) > 1 and sheet:
+        for key in keys:
+            if opens_sheet(key, sheet):
+                return str(key)
+    return str(keys[0]) if keys else ""
 
 
 def load_env(*paths: Path) -> list[str]:
@@ -111,6 +141,12 @@ def leadgen(*args: str) -> int:
 
 
 def cmd_check(_a) -> int:
+    keys = key_files()
+    if len(keys) > 1:                           # which one is used, so a wrong key is easy to spot
+        used = os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE", "")
+        print("Google keys in the secrets folder:")
+        for key in keys:
+            print(f"  {key.name} ({key_email(key)})" + ("  <- used" if str(key) == used else ""))
     code = leadgen("doctor", "--config", "config/us/austin.toml", "--db", str(DATA / "austin.sqlite"), "--require-sheet",
                    "--sheet-test")
     print("\nGmail: preparing one e-mail (nothing is sent) to test the login...")

@@ -71,3 +71,23 @@ def test_unknown_city_stops_before_any_work(capsys):
     lr = local_run()
     code = lr.cmd_leads(type("A", (), {"cities": "atlantis", "count": 3, "minutes": 1.0, "hunt_minutes": 0.0})())
     assert code == 2 and "atlantis" in capsys.readouterr().out
+
+
+def test_with_several_keys_the_one_that_opens_the_sheet_is_used(tmp_path, monkeypatch):
+    lr = local_run()
+    monkeypatch.setattr(lr, "ROOT", tmp_path)
+    for k in lr.KEYS + ("PYTHONUTF8", "PYTHONIOENCODING"):
+        monkeypatch.setenv(k, "x")                  # restored afterwards ...
+        monkeypatch.delenv(k)                       # ... and absent during the test
+    (tmp_path / "secrets").mkdir()
+    for name, email in (("a-other-business.json", "robot@other-1.iam.gserviceaccount.com"),
+                        ("b-review-leads.json", "sheet-writer@review-leads-1.iam.gserviceaccount.com")):
+        (tmp_path / "secrets" / name).write_text(json.dumps({"type": "service_account", "client_email": email}))
+    (tmp_path / "settings.txt").write_text("RQ_SHEET_ID=1AbC\n", encoding="utf-8")
+    asked = []
+    monkeypatch.setattr(lr, "opens_sheet", lambda key, sheet: asked.append((key.name, sheet)) or key.name[0] == "b")
+    lr.load_env(tmp_path / "settings.txt")
+    assert os.environ["GOOGLE_SERVICE_ACCOUNT_FILE"] == str(tmp_path / "secrets" / "b-review-leads.json")
+    assert asked == [("a-other-business.json", "1AbC"), ("b-review-leads.json", "1AbC")]
+    assert [k.name for k in lr.key_files()] == ["a-other-business.json", "b-review-leads.json"]
+    assert lr.key_email(tmp_path / "settings.txt") == ""

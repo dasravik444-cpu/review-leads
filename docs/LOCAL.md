@@ -49,6 +49,12 @@ then **x**.
 **Step 5 – Test.** Type `check`. The first time it installs what it needs (about 5 minutes). Look for
 **`[OK] Google Sheet reachable`** and **`Gmail login OK`**.
 
+If it says **`[FAIL] Google Sheet access ... HTTP 403`**, the Sheet does not let that Google key in. The line
+`[OK] Google service-account key set - …@….iam.gserviceaccount.com` shows the key's address. If the address is this
+business's (`sheet-writer@review-leads-…`): open the Sheet → **Share** → paste the address → **Editor** → untick
+**Notify people** → **Share**. If it belongs to another business of yours, download this business's key (step 3),
+type `getkey` again, then `check`: with several keys it uses the one the Sheet lets in.
+
 **Every day:** open Termux and type `leads` to find businesses (3 cities, about 4½ hours; `leads --count 1` does
 one city in about 1½ hours), or `emails` to send the day's e-mails between about **8 PM and 3 AM India time**
 on US working days. Keep the tablet charging and Termux open while it runs; the commands keep it awake. To stop

@@ -78,3 +78,28 @@ def test_plan_and_report_tabs():
     sync.append_report(["2026-10-06", "06:07"])
     sync.append_report(["2026-10-07", "06:07"])
     assert [r[0] for r in sess.tabs["Daily Report"]["rows"][1:]] == ["2026-10-06", "2026-10-07"]
+
+
+def test_access_errors_say_which_key_account_to_share_the_sheet_with():
+    from helpers import _Resp
+
+    class Session:
+        def __init__(self, status, message):
+            self.resp = _Resp(status, {"error": {"code": status, "message": message, "status": "PERMISSION_DENIED"}})
+
+        def request(self, *_a, **_k):
+            return self.resp
+
+    creds = type("Creds", (), {"service_account_email": "sheet-writer@review-leads-1.iam.gserviceaccount.com"})()
+
+    def error(status, message):
+        with pytest.raises(SheetsError) as exc:
+            SheetsClient("sheet123", credentials=creds, session=Session(status, message)).metadata()
+        return str(exc.value)
+
+    denied = error(403, "The caller does not have permission")
+    assert "The caller does not have permission" in denied and "{" not in denied      # Google's words, no JSON
+    assert "add sheet-writer@review-leads-1.iam.gserviceaccount.com as Editor" in denied
+    assert "turn on the Google Sheets API" in error(403, "Google Sheets API has not been used in project 1 before "
+                                                         "or it is disabled. Enable it by visiting https://x then retry.")
+    assert "check RQ_SHEET_ID" in error(404, "Requested entity was not found.")

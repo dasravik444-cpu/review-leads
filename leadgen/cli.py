@@ -288,12 +288,15 @@ def cmd_doctor(cfg, args) -> int:
     has_key = bool(os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON") or os.environ.get("GOOGLE_SERVICE_ACCOUNT_FILE")
                    or os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"))
     if cfg["sheets"]["enabled"]:
+        from .sheets import key_email
+
+        who = key_email()
         if args.require_sheet:
             check("RQ_SHEET_ID set", bool(sid))
-            check("Google service-account key set", has_key)
+            check("Google service-account key set", has_key, who)
         else:
             print(f"[{'OK' if sid else 'WARN'}] RQ_SHEET_ID " + ("set" if sid else "not set (leads stay in the database only)"))
-            print(f"[{'OK' if has_key else 'WARN'}] service-account key " + ("set" if has_key else "not set"))
+            print(f"[{'OK' if has_key else 'WARN'}] service-account key " + (f"set ({who})" if has_key else "not set"))
     mode = cfg["compliance"]["mode"]
     if mode == "open-data":
         print("[OK] compliance mode: open-data (Overture Maps + OpenStreetMap + the businesses' own websites; "
