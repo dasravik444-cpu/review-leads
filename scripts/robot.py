@@ -447,12 +447,22 @@ def status_text(now: float | None = None) -> str:
     if running:
         lines.append(f"Working on: {JOBS[running['job']].title} (since {fmt(running['since'])})")
     lines += ["", f"{'Job':<13}{'Last run (India time)':<24}{'Result':<44}Next run (India time)"]
+    queued = 0                         # jobs whose time today has passed (e.g. the robot was off): one after the other
     for name in PRIORITY:
         job, rec = JOBS[name], (st.get("jobs") or {}).get(name) or {}
         nxt = next_slot(job, now)
         nxt_text = "switched off in settings.txt" if not switched_on(job, settings) else fmt(nxt.timestamp()) if nxt else "-"
         if nxt and job.tz is CHICAGO and switched_on(job, settings):
             nxt_text += f" ({nxt:%H:%M} Chicago)"
+        if alive and switched_on(job, settings) and due_slot(job, now, rec.get("last_started")):
+            if running and running["job"] == name:
+                nxt_text = "now (working on it)"
+            elif rec.get("retry_at", 0) > now:
+                nxt_text = f"{fmt(rec['retry_at'])} (another job was running)"
+            else:
+                nxt_text = ("now" if not running and not queued else "next" if not queued else "after that") + \
+                    " (today's time has passed)"
+                queued += 1
         lines.append(f"{job.title:<13}{fmt(rec.get('last_started')):<24}{(rec.get('result') or '-')[:42]:<44}{nxt_text}")
     counts = lead_counts()
     if counts:

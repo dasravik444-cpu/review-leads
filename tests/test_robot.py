@@ -160,3 +160,23 @@ def test_update_keeps_a_new_version_only_when_it_starts(tmp_path, monkeypatch):
     git(work, "reset", "-q", "--hard", "HEAD")
     result, updated = r.do_update()
     assert updated and result.startswith("ok: updated") and (work / "a.txt").read_text() == "2"
+
+
+def test_status_says_when_a_job_whose_time_has_passed_runs(tmp_path, monkeypatch):
+    # switched on at 22:09 India time: the update ran, the e-mails run now, today's lead search and hunt follow
+    r = robot(tmp_path, monkeypatch)
+    now = datetime(2026, 10, 9, 22, 16, tzinfo=IST).timestamp()
+    r.save_status({"scheduler": {"heartbeat": now, "started": now - 420, "version": "abc1234"},
+                   "running": {"job": "emails", "since": now - 420},
+                   "jobs": {"update": {"last_started": now - 420, "result": "ok: already the newest version"},
+                            "backup": {"last_started": now - 600, "result": "ok"}}})
+    rows = {line[:13].strip(): line[81:] for line in r.status_text(now).splitlines()[5:10]}
+    assert rows == {"Update": "Sat 10 Oct 11:00", "E-mails": "now (working on it)",
+                    "Lead search": "next (today's time has passed)",
+                    "E-mail hunt": "after that (today's time has passed)", "Backup": "Sat 10 Oct 00:30"}
+    r.save_status({"scheduler": {"heartbeat": now}, "jobs": {"update": {"last_started": now - 420},
+                                                           "emails": {"last_started": now - 60},
+                                                           "leads": {"retry_at": now + 240}}})
+    rows = {line[:13].strip(): line[81:] for line in r.status_text(now).splitlines()[4:9]}
+    assert rows["Lead search"] == "Fri 09 Oct 22:20 (another job was running)"
+    assert rows["E-mail hunt"] == "now (today's time has passed)"
