@@ -86,6 +86,8 @@ def fetch_area(release: str, bbox: tuple, codes: list[str], min_confidence: floa
                               [f"taxonomy.primary LIKE '{p}' ESCAPE '\\'" for p in likes]) if (exact or likes) else "true"
     con = duckdb.connect()
     try:
+        # Modest limits: on a tablet the memory is shared with other programs (another lead system, say).
+        con.execute("SET threads=4; SET memory_limit='2GB';")
         if source is None or source.startswith("s3://"):
             con.execute("INSTALL httpfs; LOAD httpfs; SET s3_region='us-west-2';")
             con.execute(f"SET http_timeout={int(timeout_s * 1000)}")

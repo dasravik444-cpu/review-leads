@@ -11,6 +11,8 @@
 #   emails    send today's e-mails (US working hours: about 8 PM - 3 AM India time)
 #   update    get the newest version of the robot
 # If it stops halfway (a network hiccup), paste the line again: it carries on from where it stopped.
+# Other systems in Termux (Plant Parlour) are not touched: when proot-distro already works it is left as it is, the
+# robot has its own Ubuntu, and Termux's keep-awake lock is never released here.
 set -e
 REPO=https://github.com/dasravik444-cpu/review-leads
 RAW=https://raw.githubusercontent.com/dasravik444-cpu/review-leads/main
@@ -18,6 +20,7 @@ NAME=review-leads                       # the Ubuntu inside Termux
 DIR=/root/review-leads                  # the robot's folder in it
 UBUNTU=https://cdimage.ubuntu.com/ubuntu-base/releases/24.04/release
 APT=(apt-get -y -o Acquire::Retries=5 -o Dpkg::Options::=--force-confold)
+UBUNTU_PACKAGES="python3 python3-venv git nano ca-certificates"
 
 # pkg downloads from a volunteer mirror picked at random, and on 9 October the one it picked (linux.domainesia.com)
 # broke off halfway. Termux's own server (packages-cf.termux.dev, behind Cloudflare) is used instead, written into
@@ -65,8 +68,25 @@ install_ubuntu() {
     echo "The Ubuntu download was damaged. Paste the line again."
     exit 1
   fi
-  proot-distro install --name "$NAME" "$tarball"
+  if ! proot-distro install --name "$NAME" "$tarball"; then
+    echo "(This proot-distro is too old for that: getting the newest one...)"
+    termux_packages
+    proot-distro install --name "$NAME" "$tarball"
+  fi
   rm -f "$tarball"
+}
+
+# proot-distro from Termux's own server, upgrading all of Termux only if it does not start otherwise.
+termux_packages() {
+  use_termux_server
+  dpkg --configure -a || true
+  "${APT[@]}" update || echo "(Some package lists could not be loaded. Carrying on.)"
+  "${APT[@]}" install proot-distro
+  if ! proot-distro list >/dev/null 2>&1; then
+    echo "(proot-distro needs newer Termux parts: updating all of Termux, this can take a while...)"
+    "${APT[@]}" dist-upgrade
+    proot-distro list >/dev/null
+  fi
 }
 
 ubuntu() { proot-distro login "$NAME" -- "$@"; }
@@ -75,26 +95,21 @@ main() {
   echo "== 1/5 Access to your Download folder (tap ALLOW if Android asks)..."
   [ -d "$HOME/storage" ] || termux-setup-storage || true
 
-  echo "== 2/5 Termux: the tool that runs Ubuntu (a few minutes)..."
-  use_termux_server
-  dpkg --configure -a || true
-  "${APT[@]}" update || echo "(Some package lists could not be loaded. Carrying on.)"
-  # Only proot-distro and what it needs: upgrading all of Termux can mean hundreds of MB.
-  "${APT[@]}" install proot-distro
-  if ! proot-distro list >/dev/null 2>&1; then
-    echo "(proot-distro needs newer Termux parts: updating all of Termux, this can take a while...)"
-    "${APT[@]}" dist-upgrade
-    proot-distro list >/dev/null
-  fi
+  echo "== 2/5 Termux: the tool that runs Ubuntu..."
+  # Shared with Plant Parlour: when it works it stays exactly as it is. Otherwise only proot-distro and what it
+  # needs are installed (upgrading all of Termux can mean hundreds of MB).
+  proot-distro list >/dev/null 2>&1 || termux_packages
 
   echo "== 3/5 Ubuntu inside Termux..."
   proot-distro login "$NAME" -- true >/dev/null 2>&1 || install_ubuntu
 
   echo "== 4/5 Python and the robot inside Ubuntu (5-10 minutes)..."
   curl -fsSL --retry 5 "$RAW/android/dns.sh" | proot-distro login "$NAME" -- bash -s
-  ubuntu env DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=5 update
-  ubuntu env DEBIAN_FRONTEND=noninteractive apt-get -y -o Acquire::Retries=5 install \
-    --no-install-recommends python3 python3-venv git nano ca-certificates
+  if ! ubuntu dpkg -s $UBUNTU_PACKAGES >/dev/null 2>&1; then
+    ubuntu env DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::Retries=5 update
+    ubuntu env DEBIAN_FRONTEND=noninteractive apt-get -y -o Acquire::Retries=5 install \
+      --no-install-recommends $UBUNTU_PACKAGES
+  fi
   if ubuntu test -d "$DIR/.git"; then
     ubuntu git -C "$DIR" pull --ff-only
   else
@@ -107,19 +122,29 @@ main() {
     {
       echo "#!$PREFIX/bin/bash"
       case "$cmd" in
-        leads|emails)                   # keep the tablet awake while it works
+        leads|emails)
+          # Keeps the tablet awake while it works. The lock belongs to all of Termux (Plant Parlour holds it all
+          # the time), so it is never released here.
           echo "termux-wake-lock"
-          echo "proot-distro login $NAME -- bash $DIR/android/inside.sh $cmd \"\$@\""
-          echo "status=\$?; termux-wake-unlock; exit \$status" ;;
+          echo "exec proot-distro login $NAME -- bash $DIR/android/inside.sh $cmd \"\$@\"" ;;
+        update)                         # everything new: the robot, these commands, what Ubuntu needs
+          echo "set -o pipefail"
+          echo "curl -fsSL --retry 5 $RAW/android/setup.sh | bash -s update ||"
+          echo "  { echo 'The update stopped - check the internet and type  update  again.'; exit 1; }" ;;
         *)
           echo "exec proot-distro login $NAME -- bash $DIR/android/inside.sh $cmd \"\$@\"" ;;
       esac
-    } > "$PREFIX/bin/$cmd"
-    chmod +x "$PREFIX/bin/$cmd"
+    } > "$PREFIX/bin/.$cmd.new"
+    chmod +x "$PREFIX/bin/.$cmd.new"
+    mv -f "$PREFIX/bin/.$cmd.new" "$PREFIX/bin/$cmd"   # a new file: a running "update" keeps reading its old one
   done
 
   echo
-  echo "Done. Next: type  getkey  then  settings  then  check   (docs/LOCAL.md)"
+  if [ "${1:-}" = update ]; then
+    echo "Updated."
+  else
+    echo "Done. Next: type  getkey  then  settings  then  check   (docs/LOCAL.md)"
+  fi
 }
 
 # This script arrives through a pipe (curl ... | bash). Everything above is only definitions, so nothing runs

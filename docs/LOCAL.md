@@ -40,6 +40,9 @@ key** → **JSON** → **Create**.) Then type in Termux:
 getkey
 ```
 
+It takes only keys of the Google Cloud project `review-leads` (file names starting with `review-leads-`); keys of
+your other business in the Download folder are left alone, and copies an older `getkey` took are removed.
+
 **Step 4 – Your settings.** Type `settings`. A simple text editor opens. Move with the arrow keys in the key row
 above the keyboard and type (or paste: long-press → Paste) after each `=`:
 `RQ_SHEET_ID`, `OUTREACH_GMAIL_APP_PASSWORD`, `OUTREACH_SENDER_PHONE`, `OUTREACH_POSTAL_ADDRESS` (the table in the
@@ -50,16 +53,29 @@ then **x**.
 **`[OK] Google Sheet reachable`** and **`Gmail login OK`**.
 
 If it says **`[FAIL] Google Sheet access ... HTTP 403`**, the Sheet does not let that Google key in. The line
-`[OK] Google service-account key set - …@….iam.gserviceaccount.com` shows the key's address. If the address is this
-business's (`sheet-writer@review-leads-…`): open the Sheet → **Share** → paste the address → **Editor** → untick
-**Notify people** → **Share**. If it belongs to another business of yours, download this business's key (step 3),
-type `getkey` again, then `check`: with several keys it uses the one the Sheet lets in.
+`[OK] Google service-account key set - …@….iam.gserviceaccount.com` shows the key's address: open the Sheet →
+**Share** → paste the address → **Editor** → untick **Notify people** → **Share**, then `check` again. (Still 403?
+Then `RQ_SHEET_ID` is probably another Sheet's: fix it with `settings`.)
 
 **Every day:** open Termux and type `leads` to find businesses (3 cities, about 4½ hours; `leads --count 1` does
 one city in about 1½ hours), or `emails` to send the day's e-mails between about **8 PM and 3 AM India time**
 on US working days. Keep the tablet charging and Termux open while it runs; the commands keep it awake. To stop
 Android from closing Termux: **Settings → Apps → Termux → Battery → Unrestricted**. `update` gets the newest
-version of the robot.
+version of everything (the robot and these commands).
+
+**Next to Plant Parlour in the same Termux.** The two run side by side without touching each other:
+
+| | Review business (this robot) | Plant Parlour |
+|---|---|---|
+| Commands | `getkey` `settings` `check` `leads` `emails` `update` | `pp …` (`pp status`, `pp check` …) |
+| Ubuntu inside Termux | `review-leads` | `pp-ubuntu` |
+| Google Cloud key, Sheet, Gmail | project `review-leads`, its Sheet, das.ravik002@gmail.com | its own |
+| Runs | when you type `leads` / `emails` | by itself, on its timetable |
+
+This robot never changes Termux's shared parts once they work (proot-distro, the package lists), never releases the
+keep-awake lock Plant Parlour holds, and keeps its memory use for the map data under 2 GB. Plant Parlour's daily
+leads start at 06:00 (`pp status` shows whether it is busy), so start `leads` later in the day if you can; `emails`
+(8 PM - 3 AM) fits around it anyway.
 
 ## One-time setup (Windows, about 20 minutes)
 

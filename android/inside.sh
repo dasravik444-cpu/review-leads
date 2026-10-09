@@ -3,23 +3,33 @@
 cd "$(dirname "$0")/.." || exit 1
 cmd=$1
 shift
+PROJECT=review-leads                    # this business's Google Cloud project (its keys are named review-leads-...)
+
+field() { grep -o "\"$1\": *\"[^\"]*\"" "$2" 2>/dev/null | head -n 1 | cut -d'"' -f4; }
+google_key() { [ -f "$1" ] && [ "$(field type "$1")" = service_account ]; }
+ours() { case "$(field project_id "$1")" in "$PROJECT"*) return 0 ;; *) return 1 ;; esac; }
+
 case "$cmd" in
   getkey)
-    # The Google key file you downloaded on the tablet is in its Download folder (any name). Only Google
-    # service-account keys are copied; other .json files stay where they are.
+    # The Google key file you downloaded on the tablet is in its Download folder (any name). Only keys of this
+    # business's project are taken: other keys there (Plant Parlour's) stay out of this robot.
+    mkdir -p secrets
+    for f in secrets/*.json; do         # copies of other projects' keys that an earlier getkey took
+      if google_key "$f" && ! ours "$f"; then rm -f "$f"; echo "Removed ${f#secrets/} (not this business's key)"; fi
+    done
     found=0
     for f in "${DOWNLOAD_DIR:-/sdcard/Download}"/*.json; do
-      [ -f "$f" ] && grep -q '"type": *"service_account"' "$f" && cp "$f" secrets/ && found=1
+      if google_key "$f" && ours "$f"; then cp "$f" secrets/ && found=1; fi
     done
     if [ "$found" = 1 ]; then
-      echo "Copied. Google keys in the secrets folder now (the Sheet must be shared with the address of one):"
+      echo "Copied. This business's Google keys in the secrets folder (the Sheet must be shared with this address):"
       for f in secrets/*.json; do
-        email=$(grep -o '"client_email": *"[^"]*"' "$f" | cut -d'"' -f4)
-        [ -n "$email" ] && echo "  ${f#secrets/}  ($email)"
+        google_key "$f" && echo "  ${f#secrets/}  ($(field client_email "$f"))"
       done
     else
-      echo "No .json file in your Download folder. Download the Google key again (docs/LOCAL.md, step 3),"
-      echo "and check that Termux may use storage: type  termux-setup-storage  in Termux and tap ALLOW."
+      echo "No key of the Google Cloud project $PROJECT in your Download folder (its name starts with $PROJECT-)."
+      echo "Download it again (docs/LOCAL.md, step 3), and check that Termux may use storage: type"
+      echo "termux-setup-storage  in Termux and tap ALLOW."
     fi
     ;;
   settings)
