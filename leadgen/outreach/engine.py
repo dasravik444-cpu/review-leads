@@ -51,7 +51,7 @@ def _id_num(lead_id: str) -> int:
 class Outreach:
     def __init__(self, cfg, store, *, client=None, sender=None, inbox=None, live: bool | None = None,
                  max_emails: int | None = None, now_fn=time.time, sleep_fn=time.sleep, rng=None, use_sheet: bool = True,
-                 attach: str | None = None):
+                 attach: str | None = None, bcc: str = ""):
         self.cfg, self.store = cfg, store
         self.o = cfg["outreach"]
         # The repository is public: the owner's number and alert address can come from GitHub secrets instead.
@@ -65,6 +65,7 @@ class Outreach:
         self.now, self.sleep = now_fn, sleep_fn
         self.rng = rng or random.Random()
         self.max_emails = max_emails
+        self.bcc = bcc                  # a blind copy of each first e-mail (the owner checking what leads receive)
         # A PDF for the first e-mail (e.g. marketing/pitch.pdf): the --attach option, else [outreach.email] attachment.
         path = attach if attach is not None else str(self.o["email"].get("attachment") or "")
         self.attachment = (os.path.basename(path), Path(path).read_bytes()) if path else None
@@ -348,6 +349,9 @@ class Outreach:
             # Paused by the owner; a manual run with "max_emails" still sends that many (test e-mails).
             self.notes.append("e-mail sending paused in the config ([outreach.email] enabled = false)")
             return
+        if self.max_emails == 0:
+            self.notes.append("check only: replies and bounces read, no e-mail sent")
+            return
         local = self._local()
         today = local.date().isoformat()
         cap = self._daily_cap(today)
@@ -500,8 +504,11 @@ class Outreach:
                 ctx["attachment_note"] = tx.get("attachment_note", "")
             subject = self.rules.subject_prefix + T.render(T.pick(e.get("subjects") or tx["subjects"], lead.key), ctx)
             body = T.render(e.get("first") or tx["first"], ctx)
-            return build_message(sender_name=s.get("name", ""), sender_addr=addr, to=item["email"], subject=subject, body=body,
-                                 attachments=[self.attachment] if self.attachment else None)
+            msg = build_message(sender_name=s.get("name", ""), sender_addr=addr, to=item["email"], subject=subject, body=body,
+                                attachments=[self.attachment] if self.attachment else None)
+            if self.bcc:
+                msg["Bcc"] = self.bcc   # smtplib sends it to this address too and removes the header
+            return msg
         t = item["thread"]
         follow_ups = e.get("follow_ups") or tx["follow_ups"]
         body = T.render(follow_ups[min(item["step"] - 2, len(follow_ups) - 1)], ctx)

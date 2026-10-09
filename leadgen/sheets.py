@@ -265,10 +265,20 @@ class SheetsSync:
         return out
 
     def upsert_leads(self, rows: list[dict]) -> tuple[int, int, dict]:
-        """rows: dicts keyed by LEAD_COLUMNS. Returns (added, updated, key->lead_id adopted from sheet)."""
+        """rows: dicts keyed by LEAD_COLUMNS. Returns (added, updated, key->lead_id adopted from sheet).
+
+        A new row whose Lead ID another business already has in the sheet gets the next free number of its prefix
+        (returned among the adopted ids): a city first searched elsewhere (GitHub) and continued on this computer
+        numbers its leads from 1 again."""
         existing = self.existing_rows()
         updates, appends, adopted = [], [], {}
         last_col_no_status = col_letter(STATUS_COL - 1)
+        taken = {sheet_id for _, sheet_id in existing.values() if sheet_id}
+        top: dict[str, int] = {}
+        for lid in taken:
+            prefix, no = split_lead_id(lid)
+            if no is not None:
+                top[prefix] = max(top.get(prefix, 0), no)
         for row in rows:
             key = row["Key"]
             if key in existing:
@@ -279,6 +289,17 @@ class SheetsSync:
                 values = [_cell(row.get(c, "")) for c in LEAD_COLUMNS[:STATUS_COL]]
                 updates.append({"range": f"{_tab_ref(self.leads_tab)}!A{rownum}:{last_col_no_status}{rownum}", "values": [values]})
             else:
+                lid = row.get("Lead ID") or ""
+                prefix, no = split_lead_id(lid)
+                if lid in taken and no is not None:
+                    top[prefix] = max(top.get(prefix, 0), no) + 1
+                    lid = f"{prefix}-{top[prefix]:05d}"
+                    adopted[key] = lid
+                    row = {**row, "Lead ID": lid}
+                elif no is not None:
+                    top[prefix] = max(top.get(prefix, 0), no)
+                if lid:
+                    taken.add(lid)
                 appends.append([_cell(row.get(c, "")) for c in LEAD_COLUMNS])
         for i in range(0, len(updates), 200):
             self.c.batch_update_values(updates[i:i + 200])
@@ -298,6 +319,12 @@ class SheetsSync:
         if not self.report_tab:
             return
         self.c.append_values(f"{_tab_ref(self.report_tab)}!A1", [[_cell(v) for v in row]])
+
+
+def split_lead_id(lead_id: str) -> tuple[str, int | None]:
+    """'AUS-00017' -> ('AUS', 17); an id without a number -> (id, None)."""
+    prefix, _, no = (lead_id or "").rpartition("-")
+    return (prefix, int(no)) if prefix and no.isdigit() else (lead_id or "", None)
 
 
 def _cell(v) -> str | float | int:

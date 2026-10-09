@@ -5,6 +5,9 @@
     python scripts/local_run.py leads --cities austin,miami --minutes 60 --hunt-minutes 30
     python scripts/local_run.py emails                today's e-mails, replies and follow-ups (US working hours only)
     python scripts/local_run.py emails --dry-run      only prepares them, in the Sheet's "Email Preview" tab
+    python scripts/local_run.py emails --max 1 --copy-to me@example.com   one e-mail, and a blind copy to you
+    python scripts/local_run.py emails --check        only reads replies and bounces (any time of day)
+    python scripts/local_run.py import                lead lists (leads-<city>.zip/.csv) and your PDF from Downloads
 
 Your keys live in settings.txt in the main folder (the first run makes it from settings-example.txt); the Google
 key file (.json) goes into the secrets folder and is found by itself. Each city's memory is a file in data/.
@@ -13,8 +16,10 @@ Nothing here needs GitHub: GitHub only stores the code. (docs/LOCAL.md explains 
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import os
+import shutil
 import subprocess
 import sys
 from datetime import datetime
@@ -173,9 +178,16 @@ def cmd_leads(a) -> int:
     return worst
 
 
+def attachment() -> Path:
+    """The PDF for first e-mails: your own copy (with your number), once `import` took it from Downloads, else the
+    one in the code."""
+    own = DATA / "attachment.pdf"
+    return own if own.is_file() else ROOT / "marketing" / "pitch.pdf"
+
+
 def cmd_emails(a) -> int:
     ok, when = us_working_hours()
-    if not ok and not a.now:
+    if not ok and not a.now and not a.check:
         print(f"It is {when}: outside US working hours (Monday-Friday 08:30-16:30 there).\n"
               "E-mails that arrive at night look like spam. Run this again then (from India: about 8 PM to 3 AM),\n"
               "or add --now to send anyway.")
@@ -183,10 +195,53 @@ def cmd_emails(a) -> int:
     args = ["outreach", "--config", "config/us/outreach.toml", "--db", str(DATA / "outreach.sqlite"),
             "--mode", "dry-run" if a.dry_run else "live"]
     # One run sends what today's limit still allows (15 a day at first, rising slowly to 40), a few minutes apart.
-    args += ["--max-emails", str(a.max)]
-    if a.attach_pdf:
-        args += ["--attach", "marketing/pitch.pdf"]
-    return leadgen(*args)
+    args += ["--max-emails", "0" if a.check else str(a.max)]
+    if not a.no_pdf:
+        args += ["--attach", str(attachment())]
+    if a.copy_to:
+        args += ["--bcc", a.copy_to]
+    sent = DATA / "last-sent.csv"
+    sent.unlink(missing_ok=True)
+    os.environ["OUTREACH_SENT_CSV"] = str(sent)
+    code = leadgen(*args)
+    if sent.is_file():
+        with sent.open(encoding="utf-8") as fh:
+            rows = list(csv.DictReader(fh))
+        print(f"\nE-mails sent this run ({len(rows)}):")
+        for r in rows:
+            print(f"  {r['Lead ID']}  {r['Business']}  ->  {r['To']}  [{r['Result']}]  \"{r['Subject']}\"")
+        if a.copy_to:
+            print(f"A blind copy of each went to {a.copy_to}.")
+    return code
+
+
+def download_folders() -> list[Path]:
+    """Where a browser saves downloads: the tablet's Download folder (also inside Ubuntu), else ~/Downloads."""
+    names = [os.environ.get("DOWNLOAD_DIR", ""), "/sdcard/Download", "/storage/emulated/0/Download",
+             str(Path.home() / "Downloads")]
+    out: list[Path] = []
+    for n in names:
+        p = Path(n) if n else None
+        if p and p.is_dir() and not any(p.samefile(q) for q in out):
+            out.append(p)
+    return out
+
+
+def cmd_import(a) -> int:
+    folders = [Path(f) for f in a.folder] if a.folder else download_folders()
+    found = lambda pattern: sorted({f for d in folders for f in d.glob(pattern) if f.is_file()},  # noqa: E731
+                                   key=lambda f: f.stat().st_mtime)
+    pdfs = found("GuestEcho-overview*.pdf")
+    if pdfs:
+        shutil.copyfile(pdfs[-1], DATA / "attachment.pdf")
+        print(f"Your PDF {pdfs[-1].name} is attached to first e-mails from now on.")
+    lists = [str(f) for f in found("leads-*.zip") + found("leads-*.csv")]
+    if not lists:
+        print("No lead list (leads-<city>.zip or .csv) in " + ", ".join(map(str, folders)) + ". Download it first "
+              "(docs/LOCAL.md, \"Lead lists from GitHub\").")
+        return 0 if pdfs else 1
+    print("Lead lists: " + ", ".join(Path(f).name for f in lists))
+    return leadgen("import-leads", "--config", "config/us/austin.toml", *lists, *(["--dry-run"] if a.dry_run else []))
 
 
 def main(argv=None) -> int:
@@ -202,7 +257,13 @@ def main(argv=None) -> int:
     em.add_argument("--dry-run", action="store_true", help="only prepare the e-mails (Email Preview tab)")
     em.add_argument("--now", action="store_true", help="also outside US working hours")
     em.add_argument("--max", type=int, default=40, help="at most this many new e-mails in this run (default 40)")
-    em.add_argument("--attach-pdf", action="store_true", help="attach marketing/pitch.pdf to first e-mails")
+    em.add_argument("--attach-pdf", action="store_true", help=argparse.SUPPRESS)      # the PDF is attached anyway now
+    em.add_argument("--no-pdf", action="store_true", help="first e-mails without the PDF")
+    em.add_argument("--copy-to", default="", help="a blind copy of each first e-mail to this address (yours)")
+    em.add_argument("--check", action="store_true", help="only read replies and bounces, send nothing (any time)")
+    im = sub.add_parser("import", help="lead lists from GitHub (leads-<city>.zip) and your PDF from Downloads")
+    im.add_argument("--folder", action="append", default=[], help="look here instead of the Download folder")
+    im.add_argument("--dry-run", action="store_true", help="only count what would be added to the Sheet")
     a = ap.parse_args(argv)
     DATA.mkdir(exist_ok=True)
     missing = load_env(ROOT / "settings.txt", ROOT / ".env")
@@ -213,7 +274,7 @@ def main(argv=None) -> int:
               "Android: type  settings ), save, and run this again. Help: docs/LOCAL.md")
         if a.cmd != "leads" or "RQ_SHEET_ID" in missing or "GOOGLE_SERVICE_ACCOUNT_FILE" in missing:
             return 2
-    return {"check": cmd_check, "leads": cmd_leads, "emails": cmd_emails}[a.cmd](a)
+    return {"check": cmd_check, "leads": cmd_leads, "emails": cmd_emails, "import": cmd_import}[a.cmd](a)
 
 
 if __name__ == "__main__":

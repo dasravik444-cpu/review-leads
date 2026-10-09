@@ -103,3 +103,15 @@ def test_access_errors_say_which_key_account_to_share_the_sheet_with():
     assert "turn on the Google Sheets API" in error(403, "Google Sheets API has not been used in project 1 before "
                                                          "or it is disabled. Enable it by visiting https://x then retry.")
     assert "check RQ_SHEET_ID" in error(404, "Requested entity was not found.")
+
+
+def test_a_new_lead_whose_id_another_business_has_gets_the_next_free_number():
+    sess, sync = make()
+    sync.ensure_tabs()
+    sync.upsert_leads([row("g:1", "A Cafe", "AUS-00001"), row("g:2", "B Cafe", "AUS-00002")])     # searched on GitHub
+    # the same city continued on the tablet numbers from 1 again
+    added, updated, adopted = sync.upsert_leads([row("t:1", "C Cafe", "AUS-00001"), row("g:2", "B Cafe", "AUS-00002"),
+                                                 row("t:3", "D Cafe", "AUS-00003")])
+    ids = {r[KEY_COL]: r[0] for r in sess.tabs["Leads"]["rows"][1:]}
+    assert ids == {"g:1": "AUS-00001", "g:2": "AUS-00002", "t:1": "AUS-00003", "t:3": "AUS-00004"}
+    assert (added, updated) == (2, 1) and adopted == {"t:1": "AUS-00003", "t:3": "AUS-00004"}

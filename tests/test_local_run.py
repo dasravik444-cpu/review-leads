@@ -91,3 +91,21 @@ def test_with_several_keys_the_one_that_opens_the_sheet_is_used(tmp_path, monkey
     assert asked == [("a-other-business.json", "1AbC"), ("b-review-leads.json", "1AbC")]
     assert [k.name for k in lr.key_files()] == ["a-other-business.json", "b-review-leads.json"]
     assert lr.key_email(tmp_path / "settings.txt") == ""
+
+
+def test_import_takes_lead_lists_and_your_pdf_from_downloads(tmp_path, monkeypatch):
+    lr = local_run()
+    monkeypatch.setattr(lr, "DATA", tmp_path / "data")
+    (tmp_path / "data").mkdir()
+    downloads = tmp_path / "Download"
+    downloads.mkdir()
+    for name in ("leads-austin.zip", "leads-miami.csv", "plant-parlour-automation-1.json", "GuestEcho-overview (1).pdf"):
+        (downloads / name).write_bytes(b"x")
+    assert lr.attachment().name == "pitch.pdf"                       # until your own PDF is imported
+    calls = []
+    monkeypatch.setattr(lr, "leadgen", lambda *args: calls.append(args) or 0)
+    a = type("A", (), {"folder": [str(downloads)], "dry_run": False})()
+    assert lr.cmd_import(a) == 0
+    assert lr.attachment() == tmp_path / "data" / "attachment.pdf"
+    (cmd,) = calls
+    assert cmd[0] == "import-leads" and [Path(f).name for f in cmd[3:]] == ["leads-austin.zip", "leads-miami.csv"]

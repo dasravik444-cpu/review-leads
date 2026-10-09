@@ -564,3 +564,16 @@ def test_gmail_hanging_up_during_login_is_reported_as_a_password_problem():
     assert "Gmail refused the login" in problem and "App Password" in problem
     res = sender.send(build_message(sender_name="x", sender_addr="me@gmail.com", to="a@b.in", subject="s", body="b"))
     assert res.status == "auth"
+
+
+def test_owner_gets_a_blind_copy_and_a_check_only_run_sends_nothing(tmp_path):
+    sess, client = sheet_with(LEADS)
+    store = OutreachStore(str(tmp_path / "o.sqlite"))
+    smtp, clock = SmtpWorld(), Clock(ts(2026, 10, 14, 11))
+    code, s = runner(cfg_with(), store, client, clock, smtp, max_emails=1, bcc="owner@example.com").run()
+    assert code == 0 and len(smtp.sent) == 1
+    m = smtp.sent[0]
+    assert m["To"] == "hello@leafcafe.in" and m["Bcc"] == "owner@example.com"   # smtplib copies it there, header dropped
+    code, s = runner(cfg_with(), store, client, clock, smtp, max_emails=0).run()
+    assert code == 0 and len(smtp.sent) == 1 and s["new"] == 0
+    assert any("check only" in n for n in s["notes"])

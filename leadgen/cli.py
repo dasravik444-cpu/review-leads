@@ -13,6 +13,7 @@ Commands
   email-audit  e-mail coverage of the leads and where the gaps are (aggregate numbers only)
   email-hunt   deeper e-mail search for leads that still have none (own website again, found websites)
   usp-refresh  read the homepage of leads crawled before USP lines existed, for their USP line
+  import-leads add a lead list (CSV, or a GitHub run's leads-<city>.zip) to the Google Sheet
 """
 from __future__ import annotations
 
@@ -91,6 +92,11 @@ def build_parser() -> argparse.ArgumentParser:
     o.add_argument("--mode", choices=["dry-run", "live"], default=None, help="override [outreach].mode")
     o.add_argument("--max-emails", type=int, default=None, help="send at most this many e-mails in this run (testing)")
     o.add_argument("--attach", default=None, help="attach this PDF to first e-mails (default: [outreach.email] attachment)")
+    o.add_argument("--bcc", default="", help="a blind copy of each first e-mail to this address (to see what leads get)")
+    i = sub.add_parser("import-leads", help="add a lead list (CSV or leads-<city>.zip) to the Google Sheet")
+    i.add_argument("--config", default=DEFAULT_CONFIG, help=f"campaign config (default {DEFAULT_CONFIG})")
+    i.add_argument("files", nargs="+", help="CSV files from export-csv, or zip files of GitHub runs")
+    i.add_argument("--dry-run", action="store_true", help="only count what would be added")
     sub.add_parser("probe", help="live diagnostics of external sources").add_argument("--only", default="")
     return ap
 
@@ -112,6 +118,8 @@ def main(argv=None) -> int:
         return cmd_doctor(cfg, args)
     if args.cmd == "outreach":
         return cmd_outreach(cfg, args)
+    if args.cmd == "import-leads":
+        return cmd_import_leads(cfg, args)
     db = DB(args.db)
     try:
         if args.cmd == "run":
@@ -193,6 +201,25 @@ def _mask_contacts(text: str) -> str:
     return re.sub(r"\+\d[\d \-]{8,}\d", lambda m: m.group(0)[:4] + "*******" + m.group(0)[-3:], text)
 
 
+def cmd_import_leads(cfg, args) -> int:
+    from .importer import import_leads, read_lead_files
+    from .sheets import SheetsClient, SheetsError, SheetsSync
+
+    rows = read_lead_files(args.files)
+    try:
+        sync = SheetsSync(SheetsClient(cfg.sheet_id), cfg["sheets"]["leads_tab"], "", "")
+        sync.ensure_tabs()
+        stats = import_leads(sync, cfg, rows, dry_run=args.dry_run)
+    except SheetsError as exc:
+        print(f"Google Sheet error: {exc}", file=sys.stderr)
+        return 2
+    except Exception as exc:  # noqa: BLE001 - a damaged key file, say: one clear line instead of a traceback
+        print(f"Could not open the Google Sheet: {type(exc).__name__}: {exc} (check  check  first)", file=sys.stderr)
+        return 2
+    print(json.dumps(stats, indent=1, ensure_ascii=False))
+    return 0
+
+
 def cmd_outreach(cfg, args) -> int:
     from .outreach.engine import Outreach
     from .outreach.store import OutreachStore
@@ -200,7 +227,7 @@ def cmd_outreach(cfg, args) -> int:
     store = OutreachStore(args.db)
     try:
         live = None if args.mode is None else args.mode == "live"
-        engine = Outreach(cfg, store, live=live, max_emails=args.max_emails, attach=args.attach)
+        engine = Outreach(cfg, store, live=live, max_emails=args.max_emails, attach=args.attach, bcc=args.bcc)
         code, summary = engine.run()
     finally:
         store.close()

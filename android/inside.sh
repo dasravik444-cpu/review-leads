@@ -36,16 +36,16 @@ case "$cmd" in
     [ -f settings.txt ] || cp settings-example.txt settings.txt
     nano settings.txt
     ;;
-  check|leads|emails)
+  check|leads|emails|import)
     bash android/dns.sh
-    exec bash "run_$cmd.sh" "$@"
+    exec bash scripts/run.sh "$cmd" "$@"
     ;;
   update)
     bash android/dns.sh
     git pull --ff-only
     ;;
   *)
-    echo "usage: inside.sh getkey|settings|check|leads|emails|update"
+    echo "usage: inside.sh getkey|settings|check|leads|emails|import|update"
     exit 2
     ;;
 esac

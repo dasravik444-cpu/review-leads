@@ -9,6 +9,7 @@
 #   check     test the Google Sheet and Gmail
 #   leads     find businesses in the next US cities and their e-mail addresses
 #   emails    send today's e-mails (US working hours: about 8 PM - 3 AM India time)
+#   import    lead lists from GitHub (leads-<city>.zip) and your PDF, from your Download folder
 #   update    get the newest version of the robot
 # If it stops halfway (a network hiccup), paste the line again: it carries on from where it stopped.
 # Other systems in Termux (Plant Parlour) are not touched: when proot-distro already works it is left as it is, the
@@ -118,7 +119,7 @@ main() {
 
   echo "== 5/5 The short commands..."
   # Each command is a tiny script in Termux that runs the matching step inside Ubuntu.
-  for cmd in getkey settings check leads emails update; do
+  for cmd in getkey settings check leads emails import update; do
     {
       echo "#!$PREFIX/bin/bash"
       case "$cmd" in

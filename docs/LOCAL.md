@@ -63,6 +63,18 @@ on US working days. Keep the tablet charging and Termux open while it runs; the 
 Android from closing Termux: **Settings → Apps → Termux → Battery → Unrestricted**. `update` gets the newest
 version of everything (the robot and these commands).
 
+**Your PDF and lead lists from GitHub: `import`.** Every first e-mail carries the 2-page GuestEcho PDF. Save your
+own copy (the one with your WhatsApp number) into the tablet's Download folder, then type `import`: from then on
+that one is attached. `import` also adds lead lists you downloaded from GitHub (`leads-<city>.zip`) to the Sheet:
+today's rules are applied again (big chains and addresses that are not the business's are left out), businesses
+already in the Sheet stay exactly as they are, and none gets a Lead ID another business already has. A GitHub list
+is downloaded while signed in to GitHub, from the run's page → **Artifacts** (it stays there 7 days after the run).
+
+**A test e-mail first.** `emails --max 1 --copy-to your@gmail.com` sends one real e-mail to the next lead and a
+blind copy to you, so you see exactly what the business gets (the PDF too). About 15 minutes later,
+`emails --check` reads the replies and bounces (any time of day, nothing is sent): a bounce shows up there and in
+the Sheet.
+
 **Next to Plant Parlour in the same Termux.** The two run side by side without touching each other:
 
 | | Review business (this robot) | Plant Parlour |
@@ -131,7 +143,8 @@ Then look for **`[OK] Google Sheet reachable`** and **`Gmail login OK`**. Press 
   reads the replies into your Sheet. Leave the window open until it says it is done (30–90 minutes).
 - **Test without sending:** in your folder, click the address bar, type `cmd`, press Enter, and type
   `python scripts\local_run.py emails --dry-run`. The e-mails it would send appear in the Sheet's
-  "Email Preview" tab.
+  "Email Preview" tab. `python scripts\local_run.py import` adds lead lists from your Downloads folder (see the
+  Android part above).
 
 ## Let Windows do it by itself (optional)
 

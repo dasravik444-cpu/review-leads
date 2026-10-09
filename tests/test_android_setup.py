@@ -98,7 +98,7 @@ def test_new_tablet_gets_proot_distro_from_termux_server_ubuntu_once_and_the_com
     tarball = prefix / "tmp" / "ubuntu-base-24.04.5-base-arm64.tar.gz"                   # the newest for this device
     assert f"proot-distro install --name review-leads {tarball}" in log(tmp_path)
     assert not tarball.exists()                                                          # removed once installed
-    for cmd in ("getkey", "settings", "check", "leads", "emails", "update"):
+    for cmd in ("getkey", "settings", "check", "leads", "emails", "import", "update"):
         assert os.access(prefix / "bin" / cmd, os.X_OK)
         if cmd != "update":
             assert f"login review-leads -- bash /root/review-leads/android/inside.sh {cmd} \"$@\"" in (prefix / "bin" / cmd).read_text()
