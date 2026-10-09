@@ -302,8 +302,10 @@ def cmd_emails(a) -> int:
         print(f"\nE-mails sent this run ({len(rows)}):")
         for r in rows:
             print(f"  {r['Lead ID']}  {r['Business']}  ->  {r['To']}  [{r['Result']}]  \"{r['Subject']}\"")
-        if a.copy_to:
-            print(f"A blind copy of each went to {a.copy_to}.")
+        if a.copy_to and any(r["Result"] == "sent" for r in rows):
+            # Gmail accepted it for both; whether it delivers is up to Gmail - the copy is the proof
+            print(f"Gmail also took a blind copy of each for {a.copy_to}: it should be there within minutes "
+                  "(Inbox or Spam). If not, docs/LOCAL.md, \"A test e-mail first\", says what to check.")
     return code
 
 

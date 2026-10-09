@@ -189,3 +189,24 @@ def test_hunt_starts_with_the_city_that_has_most_businesses_to_look_at(tmp_path,
     assert lr.cmd_hunt(type("A", (), {"minutes": 60.0})()) == 0
     assert [c[2] for c in calls] == ["config/us/miami.toml", "config/us/austin.toml"]     # boston: nothing to do
     assert calls[0][-1] == "30"                                                            # half the time each
+
+
+def test_a_test_email_lists_what_was_sent_and_claims_no_more_than_gmail_said(tmp_path, monkeypatch, capsys):
+    lr = local_run()
+    monkeypatch.setattr(lr, "DATA", tmp_path)
+    monkeypatch.setattr(lr, "us_working_hours", lambda: (True, "Friday 11:38 in Chicago"))
+
+    def fake_leadgen(*args, result="sent"):
+        with open(os.environ["OUTREACH_SENT_CSV"], "w", encoding="utf-8") as fh:
+            fh.write("Lead ID,Business,To,Result,Subject\n")
+            fh.write(f"HOU-00008,Houston Tea & Beverage,tea@example.com,{result},Google reviews for Houston Tea\n")
+        return 0
+    monkeypatch.setattr(lr, "leadgen", fake_leadgen)
+    args = {"dry_run": False, "now": False, "check": False, "max": 1, "no_pdf": False, "copy_to": "me@example.com"}
+    assert lr.cmd_emails(type("A", (), args)()) == 0
+    out = capsys.readouterr().out
+    assert "HOU-00008  Houston Tea & Beverage  ->  tea@example.com  [sent]" in out
+    assert "Gmail also took a blind copy of each for me@example.com" in out and "went to" not in out
+    monkeypatch.setattr(lr, "leadgen", lambda *a: fake_leadgen(*a, result="invalid"))
+    lr.cmd_emails(type("A", (), args)())
+    assert "blind copy" not in capsys.readouterr().out                    # nothing went out: no copy either
