@@ -8,6 +8,7 @@
     python scripts/local_run.py emails --max 1 --copy-to me@example.com   one e-mail, and a blind copy to you
     python scripts/local_run.py emails --check        only reads replies and bounces (any time of day)
     python scripts/local_run.py import                lead lists (leads-<city>.zip/.csv) and your PDF from Downloads
+    python scripts/local_run.py hunt --minutes 60     more e-mail hunting in the cities searched before
 
 Your keys live in settings.txt in the main folder (the first run makes it from settings-example.txt); the Google
 key file (.json) goes into the secrets folder and is found by itself. Each city's memory is a file in data/.
@@ -20,16 +21,25 @@ import csv
 import json
 import os
 import shutil
+import sqlite3
 import subprocess
 import sys
+import time
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import tomllib
 
+try:
+    import fcntl                       # Linux, Mac, Android; on Windows two runs at once are simply not prevented
+except ImportError:
+    fcntl = None
+
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
+BUSY = 3                               # exit code: another job (the robot, or one typed by hand) is running
 US_TIME = ZoneInfo("America/Chicago")
 SEND_HOURS = (8.5, 16.5)            # US Central time, Monday to Friday (the outreach config's own window is 09:30-16:30)
 KEYS = ("RQ_SHEET_ID", "GOOGLE_SERVICE_ACCOUNT_FILE", "OUTREACH_GMAIL_ADDRESS", "OUTREACH_GMAIL_APP_PASSWORD",
@@ -178,6 +188,72 @@ def cmd_leads(a) -> int:
     return worst
 
 
+class Busy(Exception):
+    pass
+
+
+@contextmanager
+def job_lock(what: str):
+    """One lead search / e-mail run at a time (the robot and commands typed by hand share this lock)."""
+    DATA.mkdir(exist_ok=True)
+    fh = open(DATA / "robot.lock", "a+")
+    if fcntl is not None:
+        try:
+            fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            fh.seek(0)
+            holder = fh.read().strip()
+            fh.close()
+            raise Busy(holder or "another job")
+    fh.seek(0)
+    fh.truncate()
+    fh.write(f"{what} (since {time.strftime('%H:%M')})")
+    fh.flush()
+    try:
+        yield
+    finally:
+        fh.seek(0)
+        fh.truncate()
+        fh.close()                     # also releases the lock
+
+
+def not_yet_hunted(db: Path) -> int:
+    """Businesses of a city with no e-mail yet that the e-mail hunt has not looked at."""
+    sys.path.insert(0, str(ROOT))
+    from leadgen.hunt import HUNT_VERSION, LEADS
+
+    con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+    try:
+        return con.execute(f"SELECT COUNT(*) FROM places WHERE {LEADS} AND key NOT IN (SELECT place_key FROM contacts "
+                           "WHERE kind='email' AND confidence!='low') AND key NOT IN (SELECT place_key FROM tasks "
+                           "WHERE kind='hunt' AND key LIKE ?)", (f"hunt:{HUNT_VERSION}:%",)).fetchone()[0]
+    except sqlite3.Error:
+        return 0
+    finally:
+        con.close()
+
+
+def cmd_hunt(a) -> int:
+    """More e-mail hunting in cities searched before: the city with the most businesses still to look at first."""
+    known = set(fleet())
+    todo = sorted(((not_yet_hunted(db), db.stem) for db in DATA.glob("*.sqlite") if db.stem in known), reverse=True)
+    todo = [(n, city) for n, city in todo if n]
+    if not todo:
+        print("Every business found so far has been looked at by the e-mail hunt.")
+        return 0
+    end = time.time() + a.minutes * 60
+    worst = 0
+    for n, city in todo:
+        left = (end - time.time()) / 60
+        if left < 5:
+            break
+        minutes = min(left, max(15.0, a.minutes / 2))
+        print(f"\n{city}: {n} businesses without an e-mail not looked at yet ({minutes:.0f} min)")
+        worst = max(worst, leadgen("email-hunt", "--config", f"config/us/{city}.toml", "--db", str(DATA / f"{city}.sqlite"),
+                                   "--limit", "1500", "--budget-minutes", f"{minutes:.0f}"))
+    return worst
+
+
 def attachment() -> Path:
     """The PDF for first e-mails: your own copy (with your number), once `import` took it from Downloads, else the
     one in the code."""
@@ -194,8 +270,12 @@ def cmd_emails(a) -> int:
         return 0
     args = ["outreach", "--config", "config/us/outreach.toml", "--db", str(DATA / "outreach.sqlite"),
             "--mode", "dry-run" if a.dry_run else "live"]
-    # One run sends what today's limit still allows (15 a day at first, rising slowly to 40), a few minutes apart.
-    args += ["--max-emails", "0" if a.check else str(a.max)]
+    # Without --max, each run sends its share of today's limit (15 a day at first, rising slowly to 40), a few
+    # minutes apart, spread over the US working day: the robot runs this every hour.
+    if a.check:
+        args += ["--max-emails", "0"]
+    elif a.max is not None:
+        args += ["--max-emails", str(a.max)]
     if not a.no_pdf:
         args += ["--attach", str(attachment())]
     if a.copy_to:
@@ -253,10 +333,12 @@ def main(argv=None) -> int:
     le.add_argument("--cities", default="", help="these cities instead, e.g. austin,miami")
     le.add_argument("--minutes", type=float, default=60.0, help="search time per city (default 60)")
     le.add_argument("--hunt-minutes", type=float, default=30.0, help="e-mail hunt time per city (default 30)")
+    hu = sub.add_parser("hunt", help="more e-mail hunting in cities searched before")
+    hu.add_argument("--minutes", type=float, default=60.0, help="time for all cities together (default 60)")
     em = sub.add_parser("emails", help="send today's e-mails, read replies, send follow-ups")
     em.add_argument("--dry-run", action="store_true", help="only prepare the e-mails (Email Preview tab)")
     em.add_argument("--now", action="store_true", help="also outside US working hours")
-    em.add_argument("--max", type=int, default=40, help="at most this many new e-mails in this run (default 40)")
+    em.add_argument("--max", type=int, default=None, help="this many new e-mails now (default: this hour's share)")
     em.add_argument("--attach-pdf", action="store_true", help=argparse.SUPPRESS)      # the PDF is attached anyway now
     em.add_argument("--no-pdf", action="store_true", help="first e-mails without the PDF")
     em.add_argument("--copy-to", default="", help="a blind copy of each first e-mail to this address (yours)")
@@ -272,9 +354,18 @@ def main(argv=None) -> int:
                  for k in missing]
         print("Still missing: " + ", ".join(names) + "\nFill them in settings.txt (Windows: open it with Notepad; "
               "Android: type  settings ), save, and run this again. Help: docs/LOCAL.md")
-        if a.cmd != "leads" or "RQ_SHEET_ID" in missing or "GOOGLE_SERVICE_ACCOUNT_FILE" in missing:
+        # The lead search, the e-mail hunt and the import need only the Google Sheet; e-mails also need Gmail.
+        if a.cmd in ("check", "emails") or "RQ_SHEET_ID" in missing or "GOOGLE_SERVICE_ACCOUNT_FILE" in missing:
             return 2
-    return {"check": cmd_check, "leads": cmd_leads, "emails": cmd_emails, "import": cmd_import}[a.cmd](a)
+    run = {"check": cmd_check, "leads": cmd_leads, "hunt": cmd_hunt, "emails": cmd_emails, "import": cmd_import}[a.cmd]
+    if a.cmd == "check":
+        return run(a)
+    try:
+        with job_lock(a.cmd):
+            return run(a)
+    except Busy as exc:
+        print(f"Busy: {exc} is running. Try again when it has finished (robot status shows it).")
+        return BUSY
 
 
 if __name__ == "__main__":

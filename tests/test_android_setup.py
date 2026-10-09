@@ -8,6 +8,7 @@ import json
 import os
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -37,6 +38,7 @@ case "$1" in
   install) touch "$FAKE/ubuntu" ;;
   login)
     [ -f "$FAKE/ubuntu" ] || exit 1
+    if [ "$3" = --get-proot-cmd ]; then printf 'proot \\\n  --rootfs=%s/rootfs \\\n  --bind=/dev\n' "$FAKE"; exit 0; fi
     case "$4" in
       test) [ -f "$FAKE/robot" ] || exit 1 ;;           # the robot's folder
       bash) cat > /dev/null ;;
@@ -69,6 +71,8 @@ def termux(tmp_path: Path, download: bytes = UBUNTU, proot_distro_works: bool = 
     (fake / "download").write_bytes(download)
     if proot_distro_works:
         (fake / "proot-distro").touch()
+    (fake / "rootfs/root/review-leads/android").mkdir(parents=True)          # what the clone puts into Ubuntu
+    shutil.copy(ROOT / "android" / "robot.sh", fake / "rootfs/root/review-leads/android/robot.sh")
     for name, body in STUBS.items():
         (stubs / name).write_text("#!/bin/bash\n" + body + "\n")
         (stubs / name).chmod(0o755)
@@ -105,6 +109,8 @@ def test_new_tablet_gets_proot_distro_from_termux_server_ubuntu_once_and_the_com
     leads = (prefix / "bin" / "leads").read_text()
     assert "termux-wake-lock" in leads and "unlock" not in leads       # Plant Parlour keeps its keep-awake lock
     assert "android/setup.sh | bash -s update" in (prefix / "bin" / "update").read_text()
+    robot = (prefix / "bin" / "robot").read_text()
+    assert f'exec bash "{tmp_path}/fake/rootfs/root/review-leads/android/robot.sh" "$@"' in robot
     assert not list((prefix / "bin").glob(".*.new"))
 
     again = setup(env, "update")                                       # what the update command runs
@@ -167,3 +173,55 @@ def test_getkey_takes_only_this_business_key_and_removes_other_business_keys(tmp
 def test_shell_scripts_parse():
     for f in [*ROOT.glob("android/*.sh"), *ROOT.glob("run_*.sh")]:
         assert subprocess.run(["bash", "-n", str(f)]).returncode == 0, f
+
+
+ROBOT_STUBS = {
+    # "robot serve" inside Ubuntu: works until  robot off  leaves data/robot.stop for it
+    "proot-distro": '''echo "proot-distro $*" >> "$LOG"
+case "$*" in
+  *"robot serve"*) echo $$ > "$FAKE_HOST/serve.pid"; while [ ! -f "$FAKE_HOST/data/robot.stop" ]; do sleep 0.2; done
+                   rm -f "$FAKE_HOST/serve.pid"; exit 0 ;;
+  *"robot status"*) echo "Robot: RUNNING" ;;
+esac''',
+    "termux-wake-lock": 'echo "wake-lock" >> "$LOG"',
+    "termux-wake-unlock": 'echo "wake-UNLOCK" >> "$LOG"',
+    "termux-job-scheduler": 'echo "job-scheduler $*" >> "$LOG"',
+}
+
+
+def test_robot_switch_starts_keeps_itself_running_and_stops(tmp_path):
+    host = tmp_path / "rootfs/root/review-leads"
+    (host / "android").mkdir(parents=True)
+    (host / "data").mkdir()
+    shutil.copy(ROOT / "android" / "robot.sh", host / "android" / "robot.sh")
+    stubs = tmp_path / "stubs"
+    stubs.mkdir()
+    for name, body in ROBOT_STUBS.items():
+        (stubs / name).write_text("#!/bin/bash\n" + body + "\n")
+        (stubs / name).chmod(0o755)
+    home = tmp_path / "home"
+    home.mkdir()
+    env = {**os.environ, "HOME": str(home), "PREFIX": str(tmp_path / "usr"), "LOG": str(tmp_path / "log"),
+           "FAKE_HOST": str(host), "PATH": f"{stubs}{os.pathsep}{os.environ['PATH']}"}
+    robot = lambda *a: subprocess.run(["bash", str(host / "android" / "robot.sh"), *a], env=env,  # noqa: E731
+                                      capture_output=True, text=True, timeout=240)
+    on = robot("on")
+    assert "The robot is on" in on.stdout, on.stdout + on.stderr
+    pid = int((home / ".review-leads/robot.pid").read_text())
+    os.kill(pid, 0)                                                          # the supervisor runs
+    boot = (home / ".termux/boot/review-leads").read_text()
+    assert f'exec bash "{host}/android/robot.sh" watchdog' in boot and "termux-wake-lock" in boot
+    log = (tmp_path / "log").read_text()
+    assert "job-scheduler --job-id 7711" in log and "wake-lock" in log           # not Plant Parlour's 4711
+    assert "Robot: RUNNING" in robot("status").stdout
+    for _ in range(50):                                                      # the robot itself is up
+        if (host / "serve.pid").exists():
+            break
+        time.sleep(0.1)
+    off = robot("off")
+    assert "The robot is off" in off.stdout
+    assert not (home / ".review-leads/robot.pid").exists() and not (host / "serve.pid").exists()
+    log = (tmp_path / "log").read_text()
+    assert "job-scheduler --cancel --job-id 7711" in log and "UNLOCK" not in log  # the shared lock is kept
+    robot("watchdog")                                                        # switched off: it stays off
+    assert not (home / ".review-leads/robot.pid").exists()

@@ -109,3 +109,49 @@ def test_import_takes_lead_lists_and_your_pdf_from_downloads(tmp_path, monkeypat
     assert lr.attachment() == tmp_path / "data" / "attachment.pdf"
     (cmd,) = calls
     assert cmd[0] == "import-leads" and [Path(f).name for f in cmd[3:]] == ["leads-austin.zip", "leads-miami.csv"]
+
+
+def test_one_job_at_a_time_and_emails_paced_by_default(tmp_path, monkeypatch):
+    import pytest
+
+    lr = local_run()
+    monkeypatch.setattr(lr, "DATA", tmp_path)
+    with lr.job_lock("leads"):
+        with pytest.raises(lr.Busy) as exc:                 # the robot's lead search holds it: a second job waits
+            with lr.job_lock("emails"):
+                pass
+        assert "leads" in str(exc.value)
+    with lr.job_lock("emails"):                             # free again afterwards
+        pass
+    calls = []
+    monkeypatch.setattr(lr, "leadgen", lambda *a: calls.append(a) or 0)
+    monkeypatch.setattr(lr, "us_working_hours", lambda: (True, "Monday 10:00 in Chicago"))
+    args = {"dry_run": False, "now": False, "check": False, "max": None, "no_pdf": False, "copy_to": ""}
+    run = lambda **k: lr.cmd_emails(type("A", (), {**args, **k})())  # noqa: E731
+    run()
+    assert "--max-emails" not in calls[-1] and "--attach" in calls[-1]          # this hour's share, PDF attached
+    run(check=True)
+    assert calls[-1][calls[-1].index("--max-emails") + 1] == "0"
+    run(max=1, copy_to="me@example.com")
+    assert calls[-1][calls[-1].index("--max-emails") + 1] == "1" and calls[-1][-1] == "me@example.com"
+
+
+def test_hunt_starts_with_the_city_that_has_most_businesses_to_look_at(tmp_path, monkeypatch):
+    from leadgen.db import DB
+
+    lr = local_run()
+    monkeypatch.setattr(lr, "DATA", tmp_path)
+    now = 1.0
+    for city, n in (("austin", 2), ("miami", 5), ("boston", 0)):
+        db = DB(str(tmp_path / f"{city}.sqlite"))
+        for i in range(n):
+            db.conn.execute("INSERT INTO places(key,name,norm_name,provider,first_seen,updated_at,found_date,qualified) "
+                            "VALUES(?,?,?,?,?,?,?,1)", (f"k{i}", f"B{i}", f"b{i}", "overture", now, now, "2026-10-10"))
+        db.conn.commit()
+        db.close()
+    assert lr.not_yet_hunted(tmp_path / "miami.sqlite") == 5
+    calls = []
+    monkeypatch.setattr(lr, "leadgen", lambda *a: calls.append(a) or 0)
+    assert lr.cmd_hunt(type("A", (), {"minutes": 60.0})()) == 0
+    assert [c[2] for c in calls] == ["config/us/miami.toml", "config/us/austin.toml"]     # boston: nothing to do
+    assert calls[0][-1] == "30"                                                            # half the time each

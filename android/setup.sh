@@ -11,6 +11,7 @@
 #   emails    send today's e-mails (US working hours: about 8 PM - 3 AM India time)
 #   import    lead lists from GitHub (leads-<city>.zip) and your PDF, from your Download folder
 #   update    get the newest version of the robot
+#   robot     on | off | status | log: the robot that finds leads and sends e-mails by itself (android/robot.sh)
 # If it stops halfway (a network hiccup), paste the line again: it carries on from where it stopped.
 # Other systems in Termux (Plant Parlour) are not touched: when proot-distro already works it is left as it is, the
 # robot has its own Ubuntu, and Termux's keep-awake lock is never released here.
@@ -139,6 +140,17 @@ main() {
     chmod +x "$PREFIX/bin/.$cmd.new"
     mv -f "$PREFIX/bin/.$cmd.new" "$PREFIX/bin/$cmd"   # a new file: a running "update" keeps reading its old one
   done
+
+  # robot: the switch of the robot that works by itself (android/robot.sh, read from inside Ubuntu's folder, so an
+  # update of the robot also updates it).
+  rootfs=$(proot-distro login "$NAME" --get-proot-cmd 2>/dev/null | grep -o -- '--rootfs=[^ \\]*' | head -n 1 | cut -d= -f2)
+  if [ -n "$rootfs" ] && [ -f "$rootfs$DIR/android/robot.sh" ]; then
+    printf '#!%s/bin/bash\nexec bash "%s" "$@"\n' "$PREFIX" "$rootfs$DIR/android/robot.sh" > "$PREFIX/bin/.robot.new"
+    chmod +x "$PREFIX/bin/.robot.new"
+    mv -f "$PREFIX/bin/.robot.new" "$PREFIX/bin/robot"
+  else
+    echo "(The robot command could not be set up: Ubuntu's folder was not found. Paste the setup line again.)"
+  fi
 
   echo
   if [ "${1:-}" = update ]; then

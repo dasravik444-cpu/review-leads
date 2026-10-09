@@ -52,7 +52,7 @@ def test_us_city_files_share_one_sheet_and_never_overlap():
         assert next(c for c in cfg.categories if c["key"] == "dental")["overture"]
         sh = cfg["sheets"]
         assert (sh["leads_tab"], sh["plan_tab"], sh["report_tab"]) == ("Leads", "", "Daily Report")
-        assert sh["require_any"] == ["email", "whatsapp"]
+        assert sh["require_any"] == ["email", "whatsapp", "phone"]      # every business we can reach somehow
     assert len({c["campaign"]["id"] for c in cfgs}) == len(cfgs)
     assert len({c["campaign"]["lead_id_prefix"] for c in cfgs}) == len(cfgs)
     for a, b in itertools.combinations(cfgs, 2):        # a business never belongs to two cities

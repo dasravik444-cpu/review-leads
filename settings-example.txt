@@ -18,3 +18,10 @@ OUTREACH_NOTIFY_EMAIL=
 
 # The Google key file: put the .json file you downloaded from Google Cloud into the "secrets" folder.
 # Nothing to type for it here: it is found by itself.
+
+# The robot (type  robot on  on the tablet): how many new US cities it searches a day (each takes about 1.5 hours;
+# Austin gave 2,171 businesses), and yes/no switches for its jobs. Nothing to change to start with.
+ROBOT_CITIES_PER_DAY=1
+ROBOT_LEADS=yes
+ROBOT_EMAILS=yes
+ROBOT_AUTO_UPDATE=yes

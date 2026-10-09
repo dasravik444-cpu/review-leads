@@ -57,11 +57,28 @@ If it says **`[FAIL] Google Sheet access ... HTTP 403`**, the Sheet does not let
 **Share** → paste the address → **Editor** → untick **Notify people** → **Share**, then `check` again. (Still 403?
 Then `RQ_SHEET_ID` is probably another Sheet's: fix it with `settings`.)
 
-**Every day:** open Termux and type `leads` to find businesses (3 cities, about 4½ hours; `leads --count 1` does
-one city in about 1½ hours), or `emails` to send the day's e-mails between about **8 PM and 3 AM India time**
-on US working days. Keep the tablet charging and Termux open while it runs; the commands keep it awake. To stop
-Android from closing Termux: **Settings → Apps → Termux → Battery → Unrestricted**. `update` gets the newest
-version of everything (the robot and these commands).
+**Step 6 – Switch the robot on.** Type `robot on`. From then on it works by itself, every day:
+
+| When (India time) | What |
+|---|---|
+| 11:00 | gets the newest version (keeps it only if it starts cleanly) |
+| 13:00 | the next US city: an hour of search, then 30 minutes of e-mail hunt (Austin gave 2,171 businesses) |
+| 17:30 | an hour more of e-mail hunt for businesses of earlier cities that still have no e-mail |
+| 20:05 - 02:05 (from 1 November 21:05 - 03:05), US Monday-Friday | e-mails, every hour at 09:35-15:35 Chicago time: first e-mails with the PDF, follow-ups, replies and bounces |
+| 00:30 | a backup of its memory into the tablet's Documents folder (`review-leads-backup`, last 7 days) |
+
+Every business with an e-mail, WhatsApp or phone number goes into the Sheet. E-mails start at 15 a day and rise by
+5 every 3 sending days to 40 (a new Gmail that sends much more is soon treated as spam). `robot status` shows what it does,
+the last and next run of each job, and per city how many businesses it found and how many have an e-mail and a
+phone. `robot log` shows today's log, `robot off` stops it (the job it is on saves first), `robot run leads` runs
+a job now. It starts again by itself after a restart of the tablet (Termux:Boot app) and within 15 minutes if
+Android closes it (Termux:API app); both apps are already there for Plant Parlour. Keep the tablet charging and on
+Wi-Fi, and Termux on **Battery: Unrestricted** and **Autostart: on** (Settings → Apps → Termux). More than one city a
+day: `ROBOT_CITIES_PER_DAY=2` in `settings`; a job off: `ROBOT_EMAILS=no` (or `ROBOT_LEADS=no`).
+
+**By hand instead:** `leads` finds businesses (3 cities, about 4½ hours; `leads --count 1` one city), `emails` sends
+this hour's share of the day's e-mails between about **8 PM and 3 AM India time** on US working days. A command typed
+while the robot is busy says so and waits for you to try again. `update` gets the newest version of everything.
 
 **Your PDF and lead lists from GitHub: `import`.** Every first e-mail carries the 2-page GuestEcho PDF. Save your
 own copy (the one with your WhatsApp number) into the tablet's Download folder, then type `import`: from then on
@@ -82,12 +99,12 @@ the Sheet.
 | Commands | `getkey` `settings` `check` `leads` `emails` `update` | `pp …` (`pp status`, `pp check` …) |
 | Ubuntu inside Termux | `review-leads` | `pp-ubuntu` |
 | Google Cloud key, Sheet, Gmail | project `review-leads`, its Sheet, das.ravik002@gmail.com | its own |
-| Runs | when you type `leads` / `emails` | by itself, on its timetable |
+| Runs | by itself once switched on (`robot on`), at its own times | by itself, on its timetable |
 
 This robot never changes Termux's shared parts once they work (proot-distro, the package lists), never releases the
-keep-awake lock Plant Parlour holds, and keeps its memory use for the map data under 2 GB. Plant Parlour's daily
-leads start at 06:00 (`pp status` shows whether it is busy), so start `leads` later in the day if you can; `emails`
-(8 PM - 3 AM) fits around it anyway.
+keep-awake lock Plant Parlour holds, and keeps its memory use for the map data under 2 GB. Its robot uses its own
+start-up file (`~/.termux/boot/review-leads`), folder (`~/.review-leads`) and 15-minute check (job 7711; Plant
+Parlour's is 4711), and its lead search starts at 13:00, after Plant Parlour's 06:00 lead run.
 
 ## One-time setup (Windows, about 20 minutes)
 

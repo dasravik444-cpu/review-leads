@@ -96,7 +96,7 @@ enabled = true
 leads_tab = "Leads"
 plan_tab = ""                       # no per-city plan tab (many cities share the sheet)
 report_tab = "Daily Report"         # one row per city per run
-require_any = ["email", "whatsapp"] # only businesses we can actually write to go into the sheet
+require_any = ["email", "whatsapp", "phone"] # every business with a way to reach it (e-mail, WhatsApp or phone)
 checkpoint_minutes = 20
 
 [runtime]

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # What run_check.sh, run_leads.sh and run_emails.sh do (Mac, Linux, Android):  bash scripts/run.sh COMMAND [options]
-# COMMAND: check, leads, emails or import (scripts/local_run.py). The first time it makes settings.txt and installs.
+# COMMAND: check, leads, hunt, emails or import (scripts/local_run.py), or robot ... (scripts/robot.py).
+# The first time it makes settings.txt and installs what is needed.
 cd "$(dirname "$0")/.." || exit 1
 if [ ! -f settings.txt ]; then
   cp settings-example.txt settings.txt
@@ -17,4 +18,8 @@ if ! cmp -s requirements.txt .venv/.installed; then
   cp requirements.txt .venv/.installed
 fi
 mkdir -p data
+if [ "$1" = robot ]; then
+  shift
+  exec .venv/bin/python scripts/robot.py "$@"           # the robot's timetable (scripts/robot.py)
+fi
 exec .venv/bin/python scripts/local_run.py "$@"
