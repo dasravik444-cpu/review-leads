@@ -10,8 +10,11 @@ name: Outreach (letters, e-mail + WhatsApp queue)
 # do nothing. These slots cover US office hours. E-mails are spaced a few minutes apart, so each run takes up to
 # ~20 minutes: fine on a public repository (free minutes), too much for a private one (docs/SETUP.md).
 on:
-  schedule:
-    - cron: "41 14-21 * * 1-5"    # every hour 14:41-21:41 UTC = 09:41-16:41 Central (summer), Monday to Friday
+  # Timer switched off (2026-10-09): GitHub's terms allow Actions only for building, testing and deploying the
+  # software in this repository, and GitHub blocked the account's Actions after the 30-city fleet. The lead search
+  # and the e-mails now run on your own computer (docs/LOCAL.md). The manual button below still works.
+  # schedule:
+  #   - cron: "41 14-21 * * 1-5"
   workflow_dispatch:
     inputs:
       mode:

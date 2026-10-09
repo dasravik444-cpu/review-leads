@@ -8,8 +8,11 @@ name: US fleet (all cities in parallel)
 # Private repository: 2,000 minutes a month, so one city a day in turn for 25 minutes (docs/SETUP.md).
 # Manual run: Actions > US fleet > Run workflow (optionally name the cities, e.g. "austin,miami").
 on:
-  schedule:
-    - cron: "23 6 * * *"     # 06:23 UTC = night in the US: done before the US working day
+  # Timer switched off (2026-10-09): GitHub's terms allow Actions only for building, testing and deploying the
+  # software in this repository, and GitHub blocked the account's Actions after the 30-city fleet. The lead search
+  # and the e-mails now run on your own computer (docs/LOCAL.md). The manual button below still works.
+  # schedule:
+  #   - cron: "23 6 * * *"
   workflow_dispatch:
     inputs:
       cities:
