@@ -26,7 +26,7 @@ the customers. It starts with the US and other English-speaking markets.
 | Read | For |
 |---|---|
 | [docs/SETUP.md](docs/SETUP.md) | **start here**: step-by-step setup for beginners (Gmail, Sheet, keys, Cloudflare) |
-| [docs/LOCAL.md](docs/LOCAL.md) | running the lead search and the e-mails on your own computer (double-click `run_*.bat`) |
+| [docs/LOCAL.md](docs/LOCAL.md) | running the lead search and the e-mails on your own computer or Android tablet |
 | [docs/OUTREACH.md](docs/OUTREACH.md) | e-mails and WhatsApp: your daily routine |
 | [docs/BUSINESS.md](docs/BUSINESS.md) | the product, prices, competitors, who to sell to |
 | [docs/COMPLIANCE.md](docs/COMPLIANCE.md) | the rules per country, with sources |

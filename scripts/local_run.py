@@ -173,8 +173,8 @@ def main(argv=None) -> int:
     if missing:
         names = [("the Google key file (.json) in the secrets folder" if k == "GOOGLE_SERVICE_ACCOUNT_FILE" else k)
                  for k in missing]
-        print("Still missing: " + ", ".join(names) + "\nFill them in settings.txt (open it with Notepad), save, and "
-              "run this again. Help: docs/LOCAL.md")
+        print("Still missing: " + ", ".join(names) + "\nFill them in settings.txt (Windows: open it with Notepad; "
+              "Android: type  settings ), save, and run this again. Help: docs/LOCAL.md")
         if a.cmd != "leads" or "RQ_SHEET_ID" in missing or "GOOGLE_SERVICE_ACCOUNT_FILE" in missing:
             return 2
     return {"check": cmd_check, "leads": cmd_leads, "emails": cmd_emails}[a.cmd](a)

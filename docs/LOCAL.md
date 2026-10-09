@@ -8,6 +8,50 @@ e-mails. After the 30-city run on 8 October, GitHub blocked Actions for the acco
 Running it again there could get the whole GitHub account suspended. So the timers on GitHub are switched off.
 Your own computer is free, and websites block a home internet connection much less than GitHub's computers.
 
+## Android tablet or phone (about 30 minutes, once)
+
+You type a few short commands into **Termux**, a free terminal app. Termux holds a small Ubuntu Linux in which the
+robot runs exactly as on a computer.
+
+**Step 1 – Install Termux.** In the tablet's browser open
+[f-droid.org/packages/com.termux](https://f-droid.org/packages/com.termux/) → scroll to the newest version →
+**Download APK** → open the downloaded file → if Android asks, allow installing apps from your browser →
+**Install** → **Open**. (Termux recommends this F-Droid version.)
+
+**Step 2 – One paste sets up everything.** In Termux, paste this line (long-press the black screen → **Paste**)
+and press Enter:
+
+```
+pkg install -y curl && curl -fsSL https://raw.githubusercontent.com/dasravik444-cpu/review-leads/main/android/setup.sh | bash
+```
+
+When Android asks whether Termux may access files, tap **Allow**. Wait 10-15 minutes until it says
+**Done**. (If it stops with a question, press Enter.)
+
+**Step 3 – Your Google key file.** It is the `.json` file you downloaded from Google Cloud during setup, in the
+tablet's Download folder. (No longer there? Download a new one: [console.cloud.google.com](https://console.cloud.google.com)
+→ project `review-leads` → search **Service accounts** → `sheet-writer` → **Keys** → **Add key** → **Create new
+key** → **JSON** → **Create**.) Then type in Termux:
+
+```
+getkey
+```
+
+**Step 4 – Your settings.** Type `settings`. A simple text editor opens. Move with the arrow keys in the key row
+above the keyboard and type (or paste: long-press → Paste) after each `=`:
+`RQ_SHEET_ID`, `OUTREACH_GMAIL_APP_PASSWORD`, `OUTREACH_SENDER_PHONE`, `OUTREACH_POSTAL_ADDRESS` (the table in the
+Windows part below says what each one is). Save: tap **CTRL**, then the letter **o**, then Enter. Close: **CTRL**,
+then **x**.
+
+**Step 5 – Test.** Type `check`. The first time it installs what it needs (about 5 minutes). Look for
+**`[OK] Google Sheet reachable`** and **`Gmail login OK`**.
+
+**Every day:** open Termux and type `leads` to find businesses (3 cities, about 4½ hours; `leads --count 1` does
+one city in about 1½ hours), or `emails` to send the day's e-mails between about **8 PM and 3 AM India time**
+on US working days. Keep the tablet charging and Termux open while it runs; the commands keep it awake. To stop
+Android from closing Termux: **Settings → Apps → Termux → Battery → Unrestricted**. `update` gets the newest
+version of the robot.
+
 ## One-time setup (Windows, about 20 minutes)
 
 **Step 1 – Install Python.**
