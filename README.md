@@ -4,7 +4,7 @@ Google review stands for restaurants, cafés, salons, gyms and other walk-in bus
 the customers. It starts with the US and other English-speaking markets.
 
 - **Finds the businesses.**
-  - Every day it works through 30 US cities at the same time, one GitHub job per city (the "US fleet").
+  - It works through 30 US cities, a few at a time, on your own computer ([docs/LOCAL.md](docs/LOCAL.md)).
   - It covers 15 business types: restaurants, cafés, bars, bakeries, salons and barbers, gyms, hotels,
     dentists, garages and car washes, clinics and med spas, pet groomers and vets, tattoo studios, entertainment
     venues, boutiques and florists, and laundromats.
@@ -25,7 +25,8 @@ the customers. It starts with the US and other English-speaking markets.
 
 | Read | For |
 |---|---|
-| [docs/SETUP.md](docs/SETUP.md) | **start here**: step-by-step setup for beginners (Gmail, Sheet, keys, Cloudflare, free minutes) |
+| [docs/SETUP.md](docs/SETUP.md) | **start here**: step-by-step setup for beginners (Gmail, Sheet, keys, Cloudflare) |
+| [docs/LOCAL.md](docs/LOCAL.md) | running the lead search and the e-mails on your own computer (double-click `run_*.bat`) |
 | [docs/OUTREACH.md](docs/OUTREACH.md) | e-mails and WhatsApp: your daily routine |
 | [docs/BUSINESS.md](docs/BUSINESS.md) | the product, prices, competitors, who to sell to |
 | [docs/COMPLIANCE.md](docs/COMPLIANCE.md) | the rules per country, with sources |
@@ -50,6 +51,9 @@ scripts/            make_us_cities.py (city files), ci/ (fleet plan, encrypted s
 
 ## Run locally
 
+Day to day: `run_leads.bat`, `run_emails.bat` and `run_check.bat` (Windows) or the `.sh` files (Mac), set up as in
+[docs/LOCAL.md](docs/LOCAL.md). For development:
+
 ```
 pip install -r requirements.txt -r site/requirements.txt pytest
 python -m pytest -q                                   # all tests, offline
@@ -58,7 +62,7 @@ python site/build.py --preview                        # the customer pages -> si
 python -m guests.review_requests demo-cafe guests.csv # one-tap WhatsApp page for a guest list
 ```
 
-Lead data, guest lists and keys never go into git (`.gitignore`). On GitHub the databases are saved encrypted.
+Lead data, guest lists and keys never go into git (`.gitignore`: `.env`, `secrets/`, `data/`).
 
 ## For website owners: ReviewLeadBot
 

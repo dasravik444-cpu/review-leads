@@ -1,0 +1,20 @@
+# Your settings for running on your own computer (docs/LOCAL.md).
+# Type each value right after the = sign (no spaces, no quotes), save with Ctrl+S, close.
+# This file stays on your computer: it is never uploaded anywhere.
+
+# 1. Your Google Sheet's ID: in the Sheet's address, the long part between /d/ and /edit
+RQ_SHEET_ID=
+
+# 2. The Gmail that sends the e-mails, and its 16-letter app password (from myaccount.google.com/apppasswords)
+OUTREACH_GMAIL_ADDRESS=das.ravik002@gmail.com
+OUTREACH_GMAIL_APP_PASSWORD=
+
+# 3. Printed under every e-mail (US law asks for a real postal address)
+OUTREACH_SENDER_PHONE=
+OUTREACH_POSTAL_ADDRESS=
+
+# Optional: where "a business replied" alerts go (empty = the Gmail above)
+OUTREACH_NOTIFY_EMAIL=
+
+# The Google key file: put the .json file you downloaded from Google Cloud into the "secrets" folder.
+# Nothing to type for it here: it is found by itself.

@@ -34,3 +34,11 @@ node_modules/
 
 # your copy of the sales PDF with your phone number (not for the public repository)
 GuestEcho-overview*
+
+# Running on your own computer (docs/LOCAL.md): keys and lead data stay on the computer
+.env
+settings.txt
+secrets/*
+!secrets/README.txt
+data/
+/*.json

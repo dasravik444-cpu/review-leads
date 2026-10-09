@@ -1,5 +1,11 @@
 # Setup, step by step (beginner-friendly, about 1–2 hours once)
 
+> **Update, 9 October 2026: the daily work runs on your own computer now ([LOCAL.md](LOCAL.md)).** GitHub's terms
+> allow its free Actions computers only for building, testing and deploying the software, and GitHub blocked the
+> account's Actions after the 30-city run. Steps 2–5 and 7 below (Gmail, Google key, Sheet, password, Cloudflare)
+> still apply. Step 6 (keys in GitHub) and step 8 (runs on GitHub) are replaced by LOCAL.md. In GitHub, set the
+> variables `FLEET_ENABLED` and `OUTREACH_ENABLED` to `false` (their timers are switched off in the code anyway).
+
 Everything here is free. You need a computer with a browser and your phone (for Google's verification codes).
 Do the steps in order. Each step says exactly where to click. Words in **bold** are buttons or menu items.
 
@@ -23,6 +29,11 @@ password. Only your WhatsApp number is shared, so in WhatsApp Business give each
 ## Step 1 – Why a public repository, and how to make one
 
 ### The 2,000 minutes, explained
+
+> **Correction:** the "unlimited free minutes" below are real, but GitHub's terms only allow them for work on the
+> software itself (building, testing, deploying), not for lead searching or sending e-mails. That is why this work
+> now runs on your own computer ([LOCAL.md](LOCAL.md)). The public repository is still useful: Cloudflare builds
+> the customer pages from it.
 
 The robot (finding businesses, reading their websites, sending e-mails) does not run on your computer. It runs
 on **GitHub Actions**: computers in GitHub's data centres that start on a timetable, do the job and switch off.
