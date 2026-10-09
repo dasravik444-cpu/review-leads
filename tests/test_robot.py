@@ -72,6 +72,23 @@ def test_a_job_is_recorded_and_a_busy_lock_means_try_again_soon(tmp_path, monkey
     monkeypatch.setattr(r, "command", lambda job, s: ([sys.executable, "-c", "raise SystemExit(2)"], 1))
     r.run_job(r.JOBS["emails"], {})
     assert json.loads(r.STATUS.read_text())["jobs"]["emails"]["result"].startswith("failed (exit code 2)")
+    code = "import os; print('robot job:', os.environ.get('ROBOT_JOB'))"
+    monkeypatch.setattr(r, "command", lambda job, s: ([sys.executable, "-c", code], 1))
+    r.run_job(r.JOBS["hunt"], {})
+    assert "robot job: 1" in r.log_path().read_text()           # its Busy text says "the robot" (local_run)
+
+
+def test_a_job_stopped_by_robot_off_runs_again_when_it_is_back_on(tmp_path, monkeypatch):
+    r = robot(tmp_path, monkeypatch)
+    monkeypatch.setattr(r, "command", lambda job, s: (["true"], 1))
+    monkeypatch.setattr(r, "run_command", lambda *a, **k: 143)
+    at = datetime(2026, 10, 9, 14, 0, tzinfo=IST).timestamp()   # an hour after the 13:00 lead search began
+    r.save_status({"jobs": {"leads": {"last_started": at - 86400, "result": "ok"}}})
+    r.run_job(r.JOBS["leads"], {})
+    rec = json.loads(r.STATUS.read_text())["jobs"]["leads"]
+    assert rec["last_started"] == at - 86400 and rec["result"] == "stopped (robot off) - runs again when on"
+    switches = {"ROBOT_AUTO_UPDATE": "no", "ROBOT_EMAILS": "no"}
+    assert r.pick_due(at, r.load_status(), switches).name == "leads"      # today's slot is still due
 
 
 def test_status_shows_jobs_and_the_leads_per_city(tmp_path, monkeypatch):

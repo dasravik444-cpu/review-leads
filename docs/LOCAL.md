@@ -70,15 +70,17 @@ Then `RQ_SHEET_ID` is probably another Sheet's: fix it with `settings`.)
 Every business with an e-mail, WhatsApp or phone number goes into the Sheet. E-mails start at 15 a day and rise by
 5 every 3 sending days to 40 (a new Gmail that sends much more is soon treated as spam). `robot status` shows what it does,
 the last and next run of each job, and per city how many businesses it found and how many have an e-mail and a
-phone. `robot log` shows today's log, `robot off` stops it (the job it is on saves first), `robot run leads` runs
-a job now. It starts again by itself after a restart of the tablet (Termux:Boot app) and within 15 minutes if
+phone; its first line is the switch (`Switch: ON`). `robot log` shows today's log, `robot off` stops it (the job it
+is on saves first, up to 3 minutes, and runs again when the robot is back on), `robot run leads` runs a job now. It starts again by itself after a restart of the tablet (Termux:Boot app) and within 15 minutes if
 Android closes it (Termux:API app); both apps are already there for Plant Parlour. Keep the tablet charging and on
 Wi-Fi, and Termux on **Battery: Unrestricted** and **Autostart: on** (Settings → Apps → Termux). More than one city a
 day: `ROBOT_CITIES_PER_DAY=2` in `settings`; a job off: `ROBOT_EMAILS=no` (or `ROBOT_LEADS=no`).
 
 **By hand instead:** `leads` finds businesses (3 cities, about 4½ hours; `leads --count 1` one city), `emails` sends
 this hour's share of the day's e-mails between about **8 PM and 3 AM India time** on US working days. A command typed
-while the robot is busy says so and waits for you to try again. `update` gets the newest version of everything.
+while the robot is on a job says so (`Busy: e-mail sending (the robot, since 22:09 India time)`): try again later.
+`import` instead waits for that job to finish and then runs by itself. `update` gets the newest version of everything;
+after it, `robot off` and `robot on` once start the new version of the switch too.
 
 **Your PDF and lead lists from GitHub: `import`.** Every first e-mail carries the 2-page GuestEcho PDF. Save your
 own copy (the one with your WhatsApp number) into the tablet's Download folder, then type `import`: from then on
@@ -90,7 +92,9 @@ is downloaded while signed in to GitHub, from the run's page → **Artifacts** (
 **A test e-mail first.** `emails --max 1 --copy-to your@gmail.com` sends one real e-mail to the next lead and a
 blind copy to you, so you see exactly what the business gets (the PDF too). About 15 minutes later,
 `emails --check` reads the replies and bounces (any time of day, nothing is sent): a bounce shows up there and in
-the Sheet.
+the Sheet. If the copy is not in your inbox (or Spam) after a few minutes, open the sending Gmail: the e-mail should be
+in its **Sent** folder, and a "Delivery Status Notification" or "Message blocked" e-mail in its inbox means Gmail did
+not deliver it.
 
 **Next to Plant Parlour in the same Termux.** The two run side by side without touching each other:
 

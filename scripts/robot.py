@@ -194,7 +194,7 @@ def prune_logs(keep_days: int = 30) -> None:
 # ------------------------------------------------------------------ running jobs
 def run_command(args: list[str], timeout_min: float, should_stop=lambda: False, heartbeat=lambda: None) -> int:
     """Run one command, its output added to today's log. 124 = took too long, 143 = stopped (robot off)."""
-    env = {**os.environ, "PYTHONUNBUFFERED": "1"}
+    env = {**os.environ, "PYTHONUNBUFFERED": "1", "ROBOT_JOB": "1"}      # ROBOT_JOB: "the robot" in a Busy message
     with open(log_path(), "a", encoding="utf-8") as out:
         proc = subprocess.Popen(args, cwd=str(ROOT), env=env, stdout=out, stderr=subprocess.STDOUT,
                                 stdin=subprocess.DEVNULL, start_new_session=True)
@@ -322,6 +322,8 @@ def run_job(job: Job, settings: dict, should_stop=lambda: False, serving: bool =
         rec = st.setdefault("jobs", {}).setdefault(job.name, {})
         if result.startswith("busy"):
             rec["retry_at"] = time.time() + 300   # a job started by hand holds the lock: again in 5 minutes
+        elif result.startswith("stopped (robot off)"):
+            rec.update(result="stopped (robot off) - runs again when on", retry_at=0)   # the slot stays due
         else:
             rec.update(last_started=now, last_finished=time.time(), result=result, retry_at=0)
     update_status(record)
@@ -437,7 +439,7 @@ def status_text(now: float | None = None) -> str:
     st, settings = load_status(), read_settings()
     sch = st.get("scheduler") or {}
     alive = sch.get("heartbeat", 0) > now - 180
-    lines = [f"Robot: {'RUNNING' if alive else 'NOT RUNNING - start it with:  robot on'}"
+    lines = [f"Robot: {'RUNNING' if alive else 'NOT RUNNING'}"
              + (f" since {fmt(sch.get('started'))} (version {sch.get('version', '?')})" if alive else ""),
              f"Now {datetime.fromtimestamp(now, INDIA):%a %H:%M} in India = "
              f"{datetime.fromtimestamp(now, CHICAGO):%a %H:%M} in Chicago"]

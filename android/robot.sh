@@ -13,23 +13,55 @@ DIR=/root/review-leads                              # the robot's folder in it
 SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 HOST_DIR="$(dirname "$(dirname "$SELF")")"          # the same folder, seen from Termux
 HOME_DIR="$HOME/.review-leads"
-PIDFILE="$HOME_DIR/robot.pid"
+PIDFILE="$HOME_DIR/robot.pid"                       # the one supervisor (robot.sh supervise) that keeps the robot going
 STOPFLAG="$HOME_DIR/stopped"                        # robot off: stays off, also after a restart of the tablet
 LOGF="$HOME_DIR/service.log"
+STATUS="$HOST_DIR/data/robot-status.json"           # the robot's own record (scripts/robot.py): its heartbeat
 JOB_ID=7711                                         # Android job number of the 15-minute check (Plant Parlour: 4711)
+WAIT=${ROBOT_WAIT_SECONDS:-60}                      # seconds between looks while an earlier robot still runs
 
 inside() { proot-distro login "$NAME" -- bash "$DIR/android/inside.sh" "$@"; }
-running() { local pid; pid="$(cat "$PIDFILE" 2>/dev/null)" && [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; }
 stamp() { date '+%F %T'; }
+
+# That number is a live supervisor of this robot (not a number left over from before a restart of the tablet).
+supervisor() {
+  [ -n "$1" ] && kill -0 "$1" 2>/dev/null || return 1
+  [ -r "/proc/$1/cmdline" ] || return 0
+  tr '\0' ' ' < "/proc/$1/cmdline" | grep -q 'robot\.sh supervise'
+}
+running() { supervisor "$(cat "$PIDFILE" 2>/dev/null)"; }
+
+# The robot itself (inside Ubuntu) reported in during the last 3 minutes.
+robot_alive() {
+  local beat
+  beat="$(grep -o '"heartbeat": *[0-9]*' "$STATUS" 2>/dev/null | head -n 1 | grep -o '[0-9]*$')"
+  [ -n "$beat" ] && [ "$beat" -gt $(( $(date +%s) - 180 )) ]
+}
+
+# One supervisor at a time. Two can start at the same moment (robot on and the 15-minute check): both write their
+# number, the last one keeps it and the other leaves.
+mine() {
+  local pid
+  pid="$(cat "$PIDFILE" 2>/dev/null)"
+  [ "$pid" = "$$" ] && return 0
+  supervisor "$pid" && return 1
+  echo $$ > "$PIDFILE"
+  sleep 1
+  [ "$(cat "$PIDFILE" 2>/dev/null)" = "$$" ]
+}
 
 supervise() {
   mkdir -p "$HOME_DIR"
-  echo $$ > "$PIDFILE"
+  mine || exit 0                                    # another supervisor keeps it going already
   command -v termux-wake-lock >/dev/null 2>&1 && termux-wake-lock
   child=""
   trap 'touch "$STOPFLAG"; touch "$HOST_DIR/data/robot.stop" 2>/dev/null' TERM INT
   fails=0
-  while [ ! -f "$STOPFLAG" ]; do
+  while [ ! -f "$STOPFLAG" ] && mine; do
+    if robot_alive; then                            # a robot started earlier still runs: this one takes over after it
+      sleep "$WAIT"
+      continue
+    fi
     started=$(date +%s)
     echo "$(stamp) robot starting" >> "$LOGF"
     inside robot serve >> "$LOGF" 2>&1 &
@@ -42,7 +74,7 @@ supervise() {
     done
     echo "$(stamp) robot stopped (exit code $code)" >> "$LOGF"
     [ -f "$STOPFLAG" ] && break
-    [ "$code" = 75 ] && break                        # another copy is already running
+    if [ "$code" = 75 ]; then fails=0; sleep "$WAIT"; continue; fi  # another copy of the robot runs: look again later
     if [ "$code" = 10 ]; then fails=0; sleep 2; continue; fi        # updated itself: start the new version now
     if [ $(( $(date +%s) - started )) -lt 120 ]; then fails=$((fails + 1)); else fails=0; fi
     if [ "$fails" -ge 5 ]; then
@@ -52,8 +84,10 @@ supervise() {
       sleep 20
     fi
   done
-  rm -f "$PIDFILE"
-  echo "$(stamp) robot off" >> "$LOGF"
+  if [ "$(cat "$PIDFILE" 2>/dev/null)" = "$$" ]; then
+    rm -f "$PIDFILE"
+    echo "$(stamp) robot off" >> "$LOGF"
+  fi
 }
 
 start() {
@@ -68,7 +102,7 @@ start() {
   else
     nohup bash "$SELF" supervise > /dev/null 2>&1 < /dev/null &
   fi
-  for _ in 1 2 3 4 5 6 7 8 9 10; do running && break; sleep 1; done
+  for _ in $(seq 1 15); do running && break; sleep 1; done
   if running; then echo "The robot is on. It works by itself from now on (robot status shows what it does)."
   else echo "Could not start the robot - see $LOGF"; return 1; fi
 }
@@ -96,24 +130,31 @@ stop() {
   if command -v termux-job-scheduler >/dev/null 2>&1; then
     timeout 30 termux-job-scheduler --cancel --job-id "$JOB_ID" >/dev/null 2>&1 || true
   fi
-  if running; then
+  if running || robot_alive; then
     echo "Stopping - the job it is on saves its work first (up to 3 minutes)..."
-    for _ in $(seq 1 90); do running || break; sleep 2; done
+    for _ in $(seq 1 100); do running || robot_alive || break; sleep 2; done
     if running; then
       kill -TERM "$(cat "$PIDFILE")" 2>/dev/null
       sleep 3
     fi
   fi
-  rm -f "$PIDFILE"
+  running || rm -f "$PIDFILE"
   echo "The robot is off. It stays off (also after a restart of the tablet) until:  robot on"
+}
+
+switch_line() {
+  if [ -f "$STOPFLAG" ]; then
+    if robot_alive; then echo "Switch: OFF - the robot finishes the step it is on, then stops"
+    else echo "Switch: OFF (robot on starts it)"; fi
+  elif robot_alive; then echo "Switch: ON"
+  elif running; then echo "Switch: ON - the robot is starting (if this stays, robot log shows why)"
+  else echo "Switch: not running (robot on starts it)"; fi
 }
 
 case "${1:-status}" in
   on|start)   autostart; start ;;
   off|stop)   stop ;;
-  status)     if running; then echo "Switch: ON"; elif [ -f "$STOPFLAG" ]; then echo "Switch: OFF (robot on starts it)";
-              else echo "Switch: not running (robot on starts it)"; fi
-              inside robot status ;;
+  status)     switch_line; inside robot status ;;
   log|logs)   shift; inside robot log "$@" ;;
   run)        shift; inside robot run "$@" ;;
   supervise)  supervise ;;

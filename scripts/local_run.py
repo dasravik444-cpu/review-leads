@@ -41,6 +41,8 @@ ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
 BUSY = 3                               # exit code: another job (the robot, or one typed by hand) is running
 US_TIME = ZoneInfo("America/Chicago")
+INDIA = ZoneInfo("Asia/Kolkata")
+TITLES = {"leads": "lead search", "hunt": "e-mail hunt", "emails": "e-mail sending", "import": "import"}
 SEND_HOURS = (8.5, 16.5)            # US Central time, Monday to Friday (the outreach config's own window is 09:30-16:30)
 KEYS = ("RQ_SHEET_ID", "GOOGLE_SERVICE_ACCOUNT_FILE", "OUTREACH_GMAIL_ADDRESS", "OUTREACH_GMAIL_APP_PASSWORD",
         "OUTREACH_SENDER_PHONE", "OUTREACH_POSTAL_ADDRESS")
@@ -193,8 +195,9 @@ class Busy(Exception):
 
 
 @contextmanager
-def job_lock(what: str):
-    """One lead search / e-mail run at a time (the robot and commands typed by hand share this lock)."""
+def job_lock(what: str, wait: bool = False):
+    """One lead search / e-mail run / import at a time (the robot and commands typed by hand share this lock).
+    wait: wait until the job holding it has finished (the import), instead of giving up with Busy."""
     DATA.mkdir(exist_ok=True)
     fh = open(DATA / "robot.lock", "a+")
     if fcntl is not None:
@@ -202,12 +205,21 @@ def job_lock(what: str):
             fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError:
             fh.seek(0)
-            holder = fh.read().strip()
-            fh.close()
-            raise Busy(holder or "another job")
+            holder = fh.read().strip() or "another job"
+            if not wait:
+                fh.close()
+                raise Busy(holder)
+            print(f"Waiting: {holder} is running. The {TITLES.get(what, what)} starts by itself when it has "
+                  "finished - leave Termux open (Ctrl+C cancels).", flush=True)
+            try:
+                fcntl.flock(fh, fcntl.LOCK_EX)
+            except BaseException:
+                fh.close()
+                raise
     fh.seek(0)
     fh.truncate()
-    fh.write(f"{what} (since {time.strftime('%H:%M')})")
+    who = "the robot" if os.environ.get("ROBOT_JOB") else "typed by hand"
+    fh.write(f"{TITLES.get(what, what)} ({who}, since {datetime.now(INDIA):%H:%M} India time)")
     fh.flush()
     try:
         yield
@@ -312,8 +324,10 @@ def cmd_import(a) -> int:
     found = lambda pattern: sorted({f for d in folders for f in d.glob(pattern) if f.is_file()},  # noqa: E731
                                    key=lambda f: f.stat().st_mtime)
     pdfs = found("GuestEcho-overview*.pdf")
-    if pdfs:
-        shutil.copyfile(pdfs[-1], DATA / "attachment.pdf")
+    if pdfs:                           # needs no lock: an e-mail run going on now reads the old or the new file whole
+        tmp = DATA / "attachment.pdf.new"
+        shutil.copyfile(pdfs[-1], tmp)
+        os.replace(tmp, DATA / "attachment.pdf")
         print(f"Your PDF {pdfs[-1].name} is attached to first e-mails from now on.")
     lists = [str(f) for f in found("leads-*.zip") + found("leads-*.csv")]
     if not lists:
@@ -321,7 +335,9 @@ def cmd_import(a) -> int:
               "(docs/LOCAL.md, \"Lead lists from GitHub\").")
         return 0 if pdfs else 1
     print("Lead lists: " + ", ".join(Path(f).name for f in lists))
-    return leadgen("import-leads", "--config", "config/us/austin.toml", *lists, *(["--dry-run"] if a.dry_run else []))
+    with job_lock("import", wait=True):  # the Sheet gets one writer at a time: after the robot's job, if one runs
+        return leadgen("import-leads", "--config", "config/us/austin.toml", *lists,
+                       *(["--dry-run"] if a.dry_run else []))
 
 
 def main(argv=None) -> int:
@@ -360,6 +376,12 @@ def main(argv=None) -> int:
     run = {"check": cmd_check, "leads": cmd_leads, "hunt": cmd_hunt, "emails": cmd_emails, "import": cmd_import}[a.cmd]
     if a.cmd == "check":
         return run(a)
+    if a.cmd == "import":              # takes the lock itself, for the Sheet part only, and waits for it
+        try:
+            return run(a)
+        except KeyboardInterrupt:
+            print("\nCancelled - the lead lists were not imported (type  import  again later).")
+            return 130
     try:
         with job_lock(a.cmd):
             return run(a)

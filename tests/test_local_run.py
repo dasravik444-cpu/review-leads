@@ -5,6 +5,7 @@ import importlib.util
 import json
 import os
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -111,18 +112,51 @@ def test_import_takes_lead_lists_and_your_pdf_from_downloads(tmp_path, monkeypat
     assert cmd[0] == "import-leads" and [Path(f).name for f in cmd[3:]] == ["leads-austin.zip", "leads-miami.csv"]
 
 
+def test_import_waits_for_the_robots_job_and_takes_the_pdf_at_once(tmp_path, monkeypatch, capsys):
+    import threading
+
+    lr = local_run()
+    monkeypatch.setattr(lr, "DATA", tmp_path / "data")
+    (tmp_path / "data").mkdir()
+    downloads = tmp_path / "Download"
+    downloads.mkdir()
+    (downloads / "leads-austin.zip").write_bytes(b"x")
+    (downloads / "GuestEcho-overview.pdf").write_bytes(b"%PDF new")
+    calls = []
+    monkeypatch.setattr(lr, "leadgen", lambda *args: calls.append(args) or 0)
+    a = type("A", (), {"folder": [str(downloads)], "dry_run": False})()
+    done = []
+    monkeypatch.setenv("ROBOT_JOB", "1")
+    with lr.job_lock("emails"):                             # the robot is sending e-mails
+        monkeypatch.delenv("ROBOT_JOB")
+        t = threading.Thread(target=lambda: done.append(lr.cmd_import(a)))
+        t.start()
+        for _ in range(100):
+            if "Waiting: e-mail sending (the robot, since" in capsys.readouterr().out:
+                break
+            time.sleep(0.05)
+        else:
+            raise AssertionError("the import did not say it waits")
+        assert (tmp_path / "data" / "attachment.pdf").read_bytes() == b"%PDF new"   # the PDF did not wait
+        assert not calls and t.is_alive()                                         # the Sheet part does
+    t.join(10)
+    assert done == [0] and calls and calls[0][0] == "import-leads"
+
+
 def test_one_job_at_a_time_and_emails_paced_by_default(tmp_path, monkeypatch):
     import pytest
 
     lr = local_run()
     monkeypatch.setattr(lr, "DATA", tmp_path)
+    monkeypatch.setenv("ROBOT_JOB", "1")
     with lr.job_lock("leads"):
         with pytest.raises(lr.Busy) as exc:                 # the robot's lead search holds it: a second job waits
             with lr.job_lock("emails"):
                 pass
-        assert "leads" in str(exc.value)
+        assert str(exc.value).startswith("lead search (the robot, since ") and str(exc.value).endswith(" India time)")
+    monkeypatch.delenv("ROBOT_JOB")
     with lr.job_lock("emails"):                             # free again afterwards
-        pass
+        assert "e-mail sending (typed by hand, since" in (tmp_path / "robot.lock").read_text()
     calls = []
     monkeypatch.setattr(lr, "leadgen", lambda *a: calls.append(a) or 0)
     monkeypatch.setattr(lr, "us_working_hours", lambda: (True, "Monday 10:00 in Chicago"))
