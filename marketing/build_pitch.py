@@ -27,8 +27,10 @@ HERE = Path(__file__).resolve().parent
 CHROMIUM = os.environ.get("CHROMIUM_PATH", "/opt/pw-browsers/chromium")
 
 INK, MUTED, LINE, SOFT = "#101828", "#5B6676", "#E4E7EC", "#F6F4FF"
-NAVY = "#2D1B8C"                       # the brand's deep violet: headings, buttons, numbers
-VIOLET, PINK, LAVENDER = "#6A3DF0", "#FF4F8B", "#EFEAFF"     # the logo's gradient, and its light tint
+NAVY = "#25206F"                       # the brand's deep indigo: headings, buttons, numbers
+VIOLET, LAVENDER = "#4F46E5", "#EEF2FF"                       # the brand's indigo, and its light tint
+AURORA = ("#14B8A6", "#4F46E5", "#9333EA")                     # the logo's gradient: teal, indigo, purple
+GOLD = "#FFC93C"
 AMBER, AMBER_INK, GREEN, BLUE = "#F5A623", "#A85F00", "#138A52", "#1A73E8"
 
 
@@ -290,21 +292,38 @@ def icon(kind: str, bg: str = "#FFE7B8") -> str:
     return f'<svg class="icon" viewBox="0 0 42 42" xmlns="http://www.w3.org/2000/svg"><circle cx="21" cy="21" r="20" fill="{bg}"/>{body}</svg>'
 
 
+def sparkle(cx: float, cy: float, r: float, fill: str) -> str:
+    """A four-pointed sparkle."""
+    k = r * 0.18
+    return (f'<path d="M{cx} {cy - r} C{cx + k} {cy - k} {cx + k} {cy - k} {cx + r} {cy} C{cx + k} {cy + k} {cx + k} {cy + k} '
+            f'{cx} {cy + r} C{cx - k} {cy + k} {cx - k} {cy + k} {cx - r} {cy} C{cx - k} {cy - k} {cx - k} {cy - k} {cx} {cy - r}z" '
+            f'fill="{fill}"/>')
+
+
 def logo_mark(uid: str = "lm") -> str:
-    """The brand's mark: a Q drawn like the corner of a QR code, with a gold star inside, on a violet-pink tile."""
+    """The brand's mark: an A whose crossbar is a flowing gold wave, with a gold sparkle, on an aurora tile
+    (Aurenflow: "auren" for the golden glow, "flow" for the wave)."""
+    stops = "".join(f'<stop offset="{k / 2}" stop-color="{c}"/>' for k, c in enumerate(AURORA))
     return (f'<svg viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" role="img">'
-            f'<defs><linearGradient id="{uid}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="{VIOLET}"/>'
-            f'<stop offset=".55" stop-color="#B23FD6"/><stop offset="1" stop-color="{PINK}"/></linearGradient></defs>'
+            f'<defs><linearGradient id="{uid}" x1="0" y1="0" x2="1" y2="1">{stops}</linearGradient></defs>'
             f'<rect width="48" height="48" rx="13" fill="url(#{uid})"/>'
-            '<rect x="9.6" y="9.6" width="26.4" height="26.4" rx="8.4" fill="none" stroke="#fff" stroke-width="4.8"/>'
-            '<path d="M30.8 30.8 L38.6 38.6" stroke="#fff" stroke-width="5.2" stroke-linecap="round"/>'
-            f'{star(22.8, 23.4, 7.6, "#FFCC33", stroke="#FFCC33")}</svg>')
+            '<path d="M13 37.5 L23 11.5 L33 37.5" fill="none" stroke="#fff" stroke-width="4.8" stroke-linecap="round" '
+            'stroke-linejoin="round"/>'
+            f'<path d="M8.5 29 C13 24 17.5 33 22.5 28.5 S 32 24 39.5 28.5" fill="none" stroke="{GOLD}" stroke-width="3.8" '
+            'stroke-linecap="round"/>'
+            f'{sparkle(37.5, 12.5, 5, GOLD)}</svg>')
 
 
-def logo(brand: str, size: int = 34, uid: str = "lm") -> str:
-    first, rest = (brand[:1], brand[1:]) if brand else ("", "")
+def wordmark(brand: str, accent: str = "") -> str:
+    """The name, with its accent part (e.g. "flow" in Aurenflow) in the brand colour."""
+    if accent and brand.endswith(accent) and len(accent) < len(brand):
+        return f'{esc(brand[:-len(accent)])}<i>{esc(accent)}</i>'
+    return esc(brand)
+
+
+def logo(brand: str, size: int = 34, uid: str = "lm", accent: str = "") -> str:
     return (f'<div class="logo"><span class="mark" style="width:{size}px;height:{size}px">{logo_mark(uid)}</span>'
-            f'<span class="word"><i>{esc(first)}</i>{esc(rest)}</span></div>')
+            f'<span class="word">{wordmark(brand, accent)}</span></div>')
 
 
 # ------------------------------------------------------------------ the page
@@ -455,7 +474,7 @@ def build_html(d: dict) -> str:
     year = d.get("year", "2026")
     disclaimer = (f"Google and Google Maps are trademarks of Google LLC. {esc(brand)} is independent and not affiliated with "
                   "Google. Example business for illustration.")
-    top = (f'<div class="top">{logo(brand)}<div class="tag"><b>Google reviews for walk-in businesses</b><br>'
+    top = (f'<div class="top">{logo(brand, accent=d.get("brand_accent", ""))}<div class="tag"><b>Google reviews for walk-in businesses</b><br>'
            'restaurants · cafés · bars · salons · gyms · clinics · shops</div></div>')
     page1 = f"""<section class="page">
 {top}
@@ -526,7 +545,7 @@ feedback form, on WhatsApp and e-mail, and follow up for you.</div>
 </ol></div></div>
 
 <div class="sec"><div class="row"><h2>One-time price. No monthly fees.</h2>
-<div class="sub nowrap">Typical review platforms charge $75–$599 every month.</div></div>
+<div class="sub nowrap">Leading review platforms start at $299–$399 a month.</div></div>
 <div class="prices">
 <div class="price"><h4>Starter</h4><div class="for">More reviews from the customers in front of you</div>
 <div class="amt">$100<small>one-time</small></div><ul>
@@ -581,7 +600,7 @@ def render(html_text: str, pdf_path: Path, png: bool = False) -> list[Path]:
     return out
 
 
-def brand_files(brand: str, out_dir: Path) -> list[Path]:
+def brand_files(brand: str, out_dir: Path, accent: str = "") -> list[Path]:
     """The logo as files: the mark (SVG, and a 1024 px PNG for Gmail/WhatsApp profile pictures) and the mark with the
     name on a clear, a white and a dark background (PNG)."""
     from playwright.sync_api import sync_playwright
@@ -590,17 +609,15 @@ def brand_files(brand: str, out_dir: Path) -> list[Path]:
     slug = "".join(ch for ch in brand.lower() if ch.isalnum()) or "brand"
     svg = out_dir / f"{slug}-icon.svg"
     svg.write_text(logo_mark("g").replace("<svg ", '<svg width="1024" height="1024" ', 1) + "\n", encoding="utf-8")
-    first, rest = brand[:1], brand[1:]
-
     def lockup(bg: str, word: str, q: str) -> str:
         return (f'<div id="x" style="display:inline-flex;align-items:center;gap:56px;padding:80px 110px 80px 80px;background:{bg}">'
                 f'<div style="width:300px;height:300px">{logo_mark("h")}</div>'
-                f'<div style="font:800 220px/1 PitchInter;letter-spacing:-.025em;color:{word}"><span style="color:{q}">'
-                f'{esc(first)}</span>{esc(rest)}</div></div>')
+                f'<div style="font:800 220px/1 PitchInter;letter-spacing:-.025em;color:{word}">'
+                f'{wordmark(brand, accent).replace("<i>", f"<i style=\'font-style:normal;color:{q}\'>")}</div></div>')
     shots = [(f"{slug}-icon.png", f'<div id="x" style="width:1024px;height:1024px">{logo_mark("h")}</div>', True),
              (f"{slug}-logo.png", lockup("transparent", INK, VIOLET), True),
              (f"{slug}-logo-white.png", lockup("#fff", INK, VIOLET), False),
-             (f"{slug}-logo-dark.png", lockup("#1B1240", "#fff", "#B9A6FF"), False)]
+             (f"{slug}-logo-dark.png", lockup("#14123A", "#fff", "#A5B4FC"), False)]
     out = [svg]
     with sync_playwright() as p:
         kw = {"executable_path": CHROMIUM} if Path(CHROMIUM).exists() else {}
@@ -634,7 +651,7 @@ def main(argv=None) -> int:
         Path(a.html).write_text(text, encoding="utf-8")
     imgs = render(text, Path(a.out), png=a.png)
     if a.brand_files:
-        imgs += brand_files(d["brand"], HERE / "brand")
+        imgs += brand_files(d["brand"], HERE / "brand", d.get("brand_accent", ""))
     print(f"wrote {a.out}" + "".join(f"\nwrote {i}" for i in imgs))
     return 0
 

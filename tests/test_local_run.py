@@ -102,7 +102,9 @@ def test_import_takes_lead_lists_and_your_pdf_from_downloads(tmp_path, monkeypat
     downloads.mkdir()
     for name in ("leads-austin.zip", "leads-miami.csv", "plant-parlour-automation-1.json", "GuestEcho-overview (1).pdf"):
         (downloads / name).write_bytes(b"x")
-    (downloads / "Qrated-overview.pdf").write_bytes(b"%PDF new name")
+    (downloads / "Qrated-overview.pdf").write_bytes(b"%PDF older name")
+    os.utime(downloads / "Qrated-overview.pdf", (2, 2))
+    (downloads / "Aurenflow-overview.pdf").write_bytes(b"%PDF new name")
     os.utime(downloads / "GuestEcho-overview (1).pdf", (1, 1))          # the old name, downloaded long ago
     assert lr.attachment().name == "pitch.pdf"                       # until your own PDF is imported
     calls = []

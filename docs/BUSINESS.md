@@ -70,7 +70,7 @@ Sources: [it-finanzmagazin](https://www.it-finanzmagazin.de/?p=250275),
 
 ## 3. Price and packages
 
-**Decided 10 October 2026 (brand: Qrated):** two one-time packages, and nothing is shipped. Stands can't be sent
+**Decided 10 October 2026 (brand: Aurenflow):** two one-time packages, and nothing is shipped. Stands can't be sent
 from India to the US or Europe at a sensible cost, so the business gets its QR code as print-ready files and prints
 it itself. Prices in US dollars, paid by card or PayPal; the same in other English-speaking markets:
 

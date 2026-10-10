@@ -82,11 +82,12 @@ and bounces, and `robot status` says **sending PAUSED**.
 **By hand instead:** `leads` finds businesses (3 cities, about 4½ hours; `leads --count 1` one city), `emails` sends
 this hour's share of the day's e-mails between about **8 PM and 3 AM India time** on US working days. A command typed
 while the robot is on a job says so (`Busy: e-mail sending (the robot, since 22:09 India time)`): try again later.
-`import` instead waits for that job to finish and then runs by itself. `update` gets the newest version of everything;
+`import` instead waits for that job to finish and then runs by itself. `whatsapp` goes through today's WhatsApp
+messages, one tap each in WhatsApp Business (docs/WHATSAPP.md: the rules, the setup and the app's automatic replies). `update` gets the newest version of everything;
 after it, `robot off` and `robot on` once start the new version of the switch too.
 
-**Your PDF and lead lists from GitHub: `import`.** Every first e-mail carries the 2-page Qrated PDF (named
-`Qrated-overview.pdf` in the e-mail). Save your own copy (`Qrated-overview.pdf`, the one with your WhatsApp number)
+**Your PDF and lead lists from GitHub: `import`.** Every first e-mail carries the 2-page Aurenflow PDF (named
+`Aurenflow-overview.pdf` in the e-mail). Save your own copy (`Aurenflow-overview.pdf`, the one with your WhatsApp number)
 into the tablet's Download folder, then type `import`: from then on that one is attached. `import` also adds lead lists you downloaded from GitHub (`leads-<city>.zip`) to the Sheet:
 today's rules are applied again (big chains and addresses that are not the business's are left out), businesses
 already in the Sheet stay exactly as they are, and none gets a Lead ID another business already has. A GitHub list

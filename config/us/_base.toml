@@ -112,7 +112,7 @@ privacy_url = ""
 
 [outreach.sender]
 name = "Ravik"
-business = "Qrated"            # the brand: change it here and in marketing/pitch.json
+business = "Aurenflow"         # the brand: change it here and in marketing/pitch.json
 city = ""                      # optional
 phone = ""               # secret OUTREACH_SENDER_PHONE
 postal_address = ""      # REQUIRED by CAN-SPAM: secret OUTREACH_POSTAL_ADDRESS

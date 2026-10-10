@@ -25,14 +25,16 @@ def test_the_pdf_sells_a_qr_code_in_two_plans_and_highlights_ranking_and_trust()
     d = json.loads((ROOT / "marketing" / "pitch.json").read_text(encoding="utf-8"))
     html = pitch().build_html(d)
     text = html.replace("&#x27;", "'")
-    assert d["brand"] == "Qrated" and "Qrated" in text
+    assert d["brand"] == "Aurenflow" and "Auren<i>flow</i>" in text
     for promise in ("Starter", "$100", "Pro", "$200", "Your QR code", "Review tracking", "WhatsApp and e-mail review requests"):
         assert promise in text, promise
-    for gone in ("acrylic", "NFC", "Pay the bill", "$99", "$149", "$199", "Apple Pay", "delivered", "GuestEcho"):
+    for gone in ("acrylic", "NFC", "Pay the bill", "$99", "$149", "$199", "Apple Pay", "delivered", "GuestEcho", "Qrated",
+                 "$75", "$599"):
         assert gone not in text, gone                                        # nothing is shipped, no payment step
     assert "More reviews, higher on Google" in text and "More reviews, more trust" in text
     assert "“Google review count and review score factor into local search ranking.”" in text
     assert "won't use a business with fewer than 20 reviews" in text and text.count("Review Survey 2026") >= 2
+    assert "Leading review platforms start at $299–$399 a month." in text     # Birdeye $299, Podium $399 (CostBench)
 
 
 def test_the_owners_copy_carries_a_whatsapp_code_and_the_public_one_an_e_mail_code():

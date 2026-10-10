@@ -111,6 +111,8 @@ def test_new_tablet_gets_proot_distro_from_termux_server_ubuntu_once_and_the_com
     assert "android/setup.sh | bash -s update" in (prefix / "bin" / "update").read_text()
     robot = (prefix / "bin" / "robot").read_text()
     assert f'exec bash "{tmp_path}/fake/rootfs/root/review-leads/android/robot.sh" "$@"' in robot
+    whatsapp = (prefix / "bin" / "whatsapp").read_text()
+    assert f'exec bash "{tmp_path}/fake/rootfs/root/review-leads/android/whatsapp.sh" "$@"' in whatsapp
     assert not list((prefix / "bin").glob(".*.new"))
 
     again = setup(env, "update")                                       # what the update command runs

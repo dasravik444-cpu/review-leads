@@ -1,6 +1,7 @@
 {
   "_comment": "Details printed on the sales PDF (python marketing/build_pitch.py). Change them here and rebuild.",
-  "brand": "Qrated",
+  "brand": "Aurenflow",
+  "brand_accent": "flow",
   "name": "Ravik",
   "email": "das.ravik002@gmail.com",
   "phone": "",

@@ -9,6 +9,7 @@
     python scripts/local_run.py emails --check        only reads replies and bounces (any time of day)
     python scripts/local_run.py import                lead lists (leads-<city>.zip/.csv) and your PDF from Downloads
     python scripts/local_run.py hunt --minutes 60     more e-mail hunting in the cities searched before
+    python scripts/local_run.py whatsapp list         the WhatsApp Queue (on the tablet:  whatsapp  sends them one by one)
 
 Your keys live in settings.txt in the main folder (the first run makes it from settings-example.txt); the Google
 key file (.json) goes into the secrets folder and is found by itself. Each city's memory is a file in data/.
@@ -328,7 +329,8 @@ def cmd_import(a) -> int:
     folders = [Path(f) for f in a.folder] if a.folder else download_folders()
     found = lambda pattern: sorted({f for d in folders for f in d.glob(pattern) if f.is_file()},  # noqa: E731
                                    key=lambda f: f.stat().st_mtime)
-    pdfs = sorted(found("Qrated-overview*.pdf") + found("GuestEcho-overview*.pdf"), key=lambda f: f.stat().st_mtime)
+    pdfs = sorted(found("Aurenflow-overview*.pdf") + found("Qrated-overview*.pdf") + found("GuestEcho-overview*.pdf"),
+                  key=lambda f: f.stat().st_mtime)
     if pdfs:                           # needs no lock: an e-mail run going on now reads the old or the new file whole
         tmp = DATA / "attachment.pdf.new"
         shutil.copyfile(pdfs[-1], tmp)
@@ -343,6 +345,37 @@ def cmd_import(a) -> int:
     with job_lock("import", wait=True):  # the Sheet gets one writer at a time: after the robot's job, if one runs
         return leadgen("import-leads", "--config", "config/us/austin.toml", *lists,
                        *(["--dry-run"] if a.dry_run else []))
+
+
+def cmd_whatsapp(a) -> int:
+    """The WhatsApp Queue from the tablet (android/whatsapp.sh): list, the next message, a result. Sends nothing."""
+    sys.path.insert(0, str(ROOT))
+    from leadgen.config import load_config
+    from leadgen.outreach import wa_queue
+    from leadgen.sheets import SheetsClient
+
+    cfg = load_config(str(ROOT / "config" / "us" / "outreach.toml"))
+    client, tab = SheetsClient(cfg.sheet_id), cfg["outreach"]["tabs"]["whatsapp"]
+    if a.action == "mark":
+        row = wa_queue.mark(client, tab, a.row, "" if a.key == "-" else a.key, a.number, a.result)
+        print(f"Saved: {a.result}" if row else "That message is no longer in the WhatsApp Queue tab - nothing saved.")
+        return 0 if row else 1
+    items = wa_queue.pending(client, tab)
+    if a.action == "next":
+        if items:
+            it = items[0]
+            # one line for android/whatsapp.sh: tab-separated, no field empty (bash would merge two tabs)
+            print("\t".join(" ".join(str(it[k]).split()) or "-" for k in ("row", "key", "number", "lead_id", "business", "link")))
+        return 0
+    ok, when = us_working_hours()
+    print(f"WhatsApp Queue: {len(items)} message{'' if len(items) == 1 else 's'} to send.")
+    for it in items[:15]:
+        print(f"  {it['lead_id']:<11} {it['business'][:34]:<35} {it['number']:<17} {it['why']}")
+    if items and not ok and not a.now:
+        print(f"\nIt is {when}: outside US office hours. A message at night looks like spam - send them between "
+              "about 8 PM and 2 AM India time on US working days (or add --now).")
+        return 4
+    return 0
 
 
 def main(argv=None) -> int:
@@ -364,7 +397,17 @@ def main(argv=None) -> int:
     em.add_argument("--no-pdf", action="store_true", help="first e-mails without the PDF")
     em.add_argument("--copy-to", default="", help="a blind copy of each first e-mail to this address (yours)")
     em.add_argument("--check", action="store_true", help="only read replies and bounces, send nothing (any time)")
-    im = sub.add_parser("import", help="lead lists from GitHub (leads-<city>.zip) and your PDF (Qrated-overview.pdf) "
+    wa = sub.add_parser("whatsapp", help="the WhatsApp Queue: what to send, the next message, a result (sends nothing)")
+    wa_sub = wa.add_subparsers(dest="action", required=True)
+    wl = wa_sub.add_parser("list", help="the messages waiting")
+    wl.add_argument("--now", action="store_true", help="also outside US office hours")
+    wa_sub.add_parser("next", help="the next message, as one line for the tablet")
+    wm = wa_sub.add_parser("mark", help="the result of one message")
+    wm.add_argument("row", type=int)
+    wm.add_argument("key")
+    wm.add_argument("number")
+    wm.add_argument("result", choices=["Sent", "Not on WhatsApp", "Replied", "Interested", "Not interested", "Skip"])
+    im = sub.add_parser("import", help="lead lists from GitHub (leads-<city>.zip) and your PDF (Aurenflow-overview.pdf) "
                                        "from Downloads")
     im.add_argument("--folder", action="append", default=[], help="look here instead of the Download folder")
     im.add_argument("--dry-run", action="store_true", help="only count what would be added to the Sheet")
@@ -379,8 +422,9 @@ def main(argv=None) -> int:
         # The lead search, the e-mail hunt and the import need only the Google Sheet; e-mails also need Gmail.
         if a.cmd in ("check", "emails") or "RQ_SHEET_ID" in missing or "GOOGLE_SERVICE_ACCOUNT_FILE" in missing:
             return 2
-    run = {"check": cmd_check, "leads": cmd_leads, "hunt": cmd_hunt, "emails": cmd_emails, "import": cmd_import}[a.cmd]
-    if a.cmd == "check":
+    run = {"check": cmd_check, "leads": cmd_leads, "hunt": cmd_hunt, "emails": cmd_emails, "import": cmd_import,
+           "whatsapp": cmd_whatsapp}[a.cmd]
+    if a.cmd in ("check", "whatsapp"):            # whatsapp only reads and writes single cells: no need to wait
         return run(a)
     if a.cmd == "import":              # takes the lock itself, for the Sheet part only, and waits for it
         try:
