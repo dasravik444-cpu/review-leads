@@ -21,6 +21,7 @@ import argparse
 import fcntl
 import json
 import os
+import re
 import signal
 import sqlite3
 import subprocess
@@ -434,6 +435,49 @@ def daily_limit(days_sent: int, e: dict | None = None) -> int:
         return 0
 
 
+ERRORISH = re.compile(r"error|fail|refused|could not|cannot|can't|denied|traceback|exception|timed out|paused",
+                      re.IGNORECASE)
+
+
+def why_failed(lines: list[str]) -> str:
+    """One line on why a job failed, from its output: the e-mail run's notes first, else the last error line."""
+    notes = []
+    for i, line in enumerate(lines):
+        if line.strip() == '"notes": [':
+            for item in lines[i + 1:]:
+                item = item.strip()
+                if item.startswith("]"):
+                    break
+                try:
+                    notes.append(str(json.loads(item.rstrip(","))))
+                except ValueError:
+                    notes.append(item.rstrip(",").strip('"'))
+    for note in notes:
+        if ERRORISH.search(note):
+            return note[:200]
+    if notes:
+        return notes[0][:200]
+    for line in reversed(lines):
+        if ERRORISH.search(line) and "[robot]" not in line:
+            return line.strip()[:200]
+    return ""
+
+
+def failure_reason(job: Job, rec: dict) -> str:
+    """Why a job's last run failed, read from that day's log (between its "started" and "failed" lines)."""
+    if not rec.get("last_started"):
+        return ""
+    try:
+        lines = log_path(rec["last_started"]).read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return ""
+    ends = [i for i, line in enumerate(lines) if f"[robot] {job.title}: failed" in line]
+    if not ends:
+        return ""
+    starts = [i for i, line in enumerate(lines[:ends[-1]]) if f"[robot] {job.title}: started" in line]
+    return why_failed(lines[(starts[-1] if starts else 0):ends[-1]])
+
+
 def fmt(ts: float | None) -> str:
     return datetime.fromtimestamp(ts, INDIA).strftime("%a %d %b %H:%M") if ts else "-"
 
@@ -456,6 +500,7 @@ def status_text(now: float | None = None) -> str:
         lines.append(f"Working on: {JOBS[running['job']].title} (since {fmt(running['since'])})")
     lines += ["", f"{'Job':<13}{'Last run (India time)':<24}{'Result':<44}Next run (India time)"]
     queued = 0                         # jobs whose time today has passed (e.g. the robot was off): one after the other
+    problems = []
     e_cfg = email_settings()
     paused = e_cfg.get("enabled") is False           # sending paused in the config: the job only reads replies
     for name in PRIORITY:
@@ -476,6 +521,12 @@ def status_text(now: float | None = None) -> str:
         if name == "emails" and paused and switched_on(job, settings):
             nxt_text += " - sending PAUSED, reads replies only"
         lines.append(f"{job.title:<13}{fmt(rec.get('last_started')):<24}{(rec.get('result') or '-')[:42]:<44}{nxt_text}")
+        if (rec.get("result") or "").startswith("failed"):
+            why = failure_reason(job, rec)
+            if why:
+                problems.append(f"  {job.title} ({fmt(rec.get('last_started'))}): {why}")
+    if problems:
+        lines += ["", "Why it failed (robot log shows more):"] + problems
     counts = lead_counts()
     if counts:
         lines += ["", "Leads found on this tablet (businesses, and how many have each contact):",

@@ -196,3 +196,27 @@ def test_status_says_when_sending_is_paused_in_the_config(tmp_path, monkeypatch)
     e["enabled"] = True
     assert "PAUSED" not in r.status_text(now)
     assert r.email_settings is not None and r.daily_limit(7, e) == 25           # 15, +5 every 3 sending days
+
+
+def test_status_says_why_a_job_failed_from_that_days_log(tmp_path, monkeypatch):
+    r = robot(tmp_path, monkeypatch)
+    monkeypatch.setattr(r, "email_settings", lambda: {"enabled": True})
+    started = datetime(2026, 10, 10, 2, 5, tzinfo=IST).timestamp()
+    r.log_path(started).write_text("\n".join([
+        "01:06:10 [robot] E-mails: ok (1 min)",
+        "02:05:01 [robot] E-mails: started",
+        ">>> leadgen outreach --config config/us/outreach.toml --mode live",
+        "{", ' "status": "ok",', ' "new": 0,', ' "notes": [',
+        '  "could not read the Gmail inbox: error: b\'[AUTHENTICATIONFAILED] Invalid credentials\'",',
+        '  "no e-mails this run: outside the sending window"', " ]", "}",
+        "02:06:40 [robot] E-mails: failed (exit code 2) - see the log (2 min)",
+        "11:00:02 [robot] Update: started"]) + "\n")
+    r.save_status({"scheduler": {"heartbeat": started}, "jobs": {"emails": {
+        "last_started": started, "result": "failed (exit code 2) - see the log"}}})
+    text = r.status_text(started + 600)
+    assert ("Why it failed (robot log shows more):\n  E-mails (Sat 10 Oct 02:05): could not read the Gmail inbox: "
+            "error: b'[AUTHENTICATIONFAILED] Invalid credentials'") in text
+    lines = ["Traceback (most recent call last):", '  File "x.py", line 1', "OSError: [Errno 28] No space left on device",
+             "Done. The new leads are in your Google Sheet"]
+    assert r.why_failed(['"notes": []', *lines]) == "OSError: [Errno 28] No space left on device"
+    assert r.why_failed(["all fine"]) == ""
