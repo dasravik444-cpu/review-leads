@@ -102,12 +102,21 @@ def test_import_takes_lead_lists_and_your_pdf_from_downloads(tmp_path, monkeypat
     downloads.mkdir()
     for name in ("leads-austin.zip", "leads-miami.csv", "plant-parlour-automation-1.json", "GuestEcho-overview (1).pdf"):
         (downloads / name).write_bytes(b"x")
+    (downloads / "Qrated-overview.pdf").write_bytes(b"%PDF new name")
+    os.utime(downloads / "GuestEcho-overview (1).pdf", (1, 1))          # the old name, downloaded long ago
     assert lr.attachment().name == "pitch.pdf"                       # until your own PDF is imported
     calls = []
     monkeypatch.setattr(lr, "leadgen", lambda *args: calls.append(args) or 0)
     a = type("A", (), {"folder": [str(downloads)], "dry_run": False})()
     assert lr.cmd_import(a) == 0
     assert lr.attachment() == tmp_path / "data" / "attachment.pdf"
+    assert lr.attachment().read_bytes() == b"%PDF new name"                 # the newest of your PDFs
+    public = tmp_path / "marketing" / "pitch.pdf"
+    public.parent.mkdir()
+    public.write_bytes(b"%PDF in the code")
+    monkeypatch.setattr(lr, "ROOT", tmp_path)
+    os.utime(tmp_path / "data" / "attachment.pdf", (1, 1))                    # imported before an update changed the PDF
+    assert lr.attachment() == public                                         # the code's newer PDF, not the old copy
     (cmd,) = calls
     assert cmd[0] == "import-leads" and [Path(f).name for f in cmd[3:]] == ["leads-austin.zip", "leads-miami.csv"]
 

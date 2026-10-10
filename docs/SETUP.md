@@ -87,9 +87,9 @@ A new repository starts with a clean history, so nothing about the other busines
 
 1. Open [accounts.google.com/signup](https://accounts.google.com/signup) in a private/incognito window, so you
    are not signed in with your other accounts.
-2. Fill in a name. Use your business name or your name plus the business, e.g. "Ravik | GuestEcho". Then
+2. Fill in a name. Use your business name or your name plus the business, e.g. "Ravik | Qrated". Then
    birthday and gender.
-3. Choose **Create your own Gmail address**, e.g. `guestecho.ravik@gmail.com`. Pick a professional-looking one,
+3. Choose **Create your own Gmail address**, e.g. `qrated.ravik@gmail.com`. Pick a professional-looking one,
    because businesses will see it.
 4. Set a strong password and save it somewhere safe.
 5. Add your phone number when asked, and type the code Google texts you.

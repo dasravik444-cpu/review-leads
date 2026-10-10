@@ -268,9 +268,12 @@ def cmd_hunt(a) -> int:
 
 def attachment() -> Path:
     """The PDF for first e-mails: your own copy (with your number), once `import` took it from Downloads, else the
-    one in the code."""
-    own = DATA / "attachment.pdf"
-    return own if own.is_file() else ROOT / "marketing" / "pitch.pdf"
+    one in the code. Whichever is newer: a new PDF in the code (after  update ) replaces an older copy of yours until
+    you import your copy of the new one."""
+    own, public = DATA / "attachment.pdf", ROOT / "marketing" / "pitch.pdf"
+    if own.is_file() and (not public.is_file() or own.stat().st_mtime >= public.stat().st_mtime):
+        return own
+    return public
 
 
 def cmd_emails(a) -> int:
@@ -325,7 +328,7 @@ def cmd_import(a) -> int:
     folders = [Path(f) for f in a.folder] if a.folder else download_folders()
     found = lambda pattern: sorted({f for d in folders for f in d.glob(pattern) if f.is_file()},  # noqa: E731
                                    key=lambda f: f.stat().st_mtime)
-    pdfs = found("GuestEcho-overview*.pdf")
+    pdfs = sorted(found("Qrated-overview*.pdf") + found("GuestEcho-overview*.pdf"), key=lambda f: f.stat().st_mtime)
     if pdfs:                           # needs no lock: an e-mail run going on now reads the old or the new file whole
         tmp = DATA / "attachment.pdf.new"
         shutil.copyfile(pdfs[-1], tmp)
@@ -361,7 +364,8 @@ def main(argv=None) -> int:
     em.add_argument("--no-pdf", action="store_true", help="first e-mails without the PDF")
     em.add_argument("--copy-to", default="", help="a blind copy of each first e-mail to this address (yours)")
     em.add_argument("--check", action="store_true", help="only read replies and bounces, send nothing (any time)")
-    im = sub.add_parser("import", help="lead lists from GitHub (leads-<city>.zip) and your PDF from Downloads")
+    im = sub.add_parser("import", help="lead lists from GitHub (leads-<city>.zip) and your PDF (Qrated-overview.pdf) "
+                                       "from Downloads")
     im.add_argument("--folder", action="append", default=[], help="look here instead of the Download folder")
     im.add_argument("--dry-run", action="store_true", help="only count what would be added to the Sheet")
     a = ap.parse_args(argv)

@@ -224,9 +224,10 @@ def test_first_email_carries_the_pdf_and_a_manual_test_goes_out_after_hours(tmp_
     assert code == 0, s
     [first] = smtp.sent                                          # ...a manual test run goes out right away
     assert [(a.get_filename(), a.get_content_type(), a.get_content()) for a in first.iter_attachments()] == \
-        [("pitch.pdf", "application/pdf", b"%PDF-1.4 two pages")]
+        [("Green-Supply-Co-overview.pdf", "application/pdf", b"%PDF-1.4 two pages")]   # named after the sender's brand
     text = body_text(first)
-    assert "attached a two-page overview (PDF)" in text and "$99" in text and "Ravi" in text
+    assert "attached a two-page overview (PDF)" in text and "$100" in text and "Ravi" in text
+    assert "stand" not in text and "tap" not in text.replace("taps", "")         # a QR code only: nothing is shipped
     # three days later: the follow-up carries no attachment, a new first e-mail does
     later = Clock(datetime(2026, 10, 12, 16, 0, tzinfo=tz).timestamp())           # last run of the day: all due go out
     code, s = runner(cfg, OutreachStore(db), client, later, smtp, attach=str(pdf)).run()
@@ -234,4 +235,4 @@ def test_first_email_carries_the_pdf_and_a_manual_test_goes_out_after_hours(tmp_
     by_to = {m["To"]: m for m in smtp.sent[1:]}
     assert set(by_to) == {"hola@tacotown.com", "hi@brewlab.com"}
     assert by_to["hola@tacotown.com"]["Subject"].startswith("Re:") and not list(by_to["hola@tacotown.com"].iter_attachments())
-    assert [a.get_filename() for a in by_to["hi@brewlab.com"].iter_attachments()] == ["pitch.pdf"]
+    assert [a.get_filename() for a in by_to["hi@brewlab.com"].iter_attachments()] == ["Green-Supply-Co-overview.pdf"]

@@ -1,11 +1,11 @@
 {
   "_comment": "Details printed on the sales PDF (python marketing/build_pitch.py). Change them here and rebuild.",
-  "brand": "GuestEcho",
+  "brand": "Qrated",
   "name": "Ravik",
   "email": "das.ravik002@gmail.com",
   "phone": "",
   "website": "",
   "example_business": "Joe's Diner",
-  "qr_demo": "Example only: Joe's Diner review and pay page",
+  "qr_demo": "Example only: Joe's Diner Google review page",
   "year": "2026"
 }

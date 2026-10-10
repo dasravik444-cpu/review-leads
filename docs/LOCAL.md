@@ -85,9 +85,9 @@ while the robot is on a job says so (`Busy: e-mail sending (the robot, since 22:
 `import` instead waits for that job to finish and then runs by itself. `update` gets the newest version of everything;
 after it, `robot off` and `robot on` once start the new version of the switch too.
 
-**Your PDF and lead lists from GitHub: `import`.** Every first e-mail carries the 2-page GuestEcho PDF. Save your
-own copy (the one with your WhatsApp number) into the tablet's Download folder, then type `import`: from then on
-that one is attached. `import` also adds lead lists you downloaded from GitHub (`leads-<city>.zip`) to the Sheet:
+**Your PDF and lead lists from GitHub: `import`.** Every first e-mail carries the 2-page Qrated PDF (named
+`Qrated-overview.pdf` in the e-mail). Save your own copy (`Qrated-overview.pdf`, the one with your WhatsApp number)
+into the tablet's Download folder, then type `import`: from then on that one is attached. `import` also adds lead lists you downloaded from GitHub (`leads-<city>.zip`) to the Sheet:
 today's rules are applied again (big chains and addresses that are not the business's are left out), businesses
 already in the Sheet stay exactly as they are, and none gets a Lead ID another business already has. A GitHub list
 is downloaded while signed in to GitHub, from the run's page → **Artifacts** (it stays there 7 days after the run).

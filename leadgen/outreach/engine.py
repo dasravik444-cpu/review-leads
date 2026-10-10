@@ -68,7 +68,9 @@ class Outreach:
         self.bcc = bcc                  # a blind copy of each first e-mail (the owner checking what leads receive)
         # A PDF for the first e-mail (e.g. marketing/pitch.pdf): the --attach option, else [outreach.email] attachment.
         path = attach if attach is not None else str(self.o["email"].get("attachment") or "")
-        self.attachment = (os.path.basename(path), Path(path).read_bytes()) if path else None
+        brand = re.sub(r"[^A-Za-z0-9]+", "-", str(self.o["sender"].get("business") or "")).strip("-")
+        self.attachment = ((f"{brand}-overview.pdf" if brand else os.path.basename(path)), Path(path).read_bytes()) \
+            if path else None
         if live is None:
             live = self.o["mode"] == "live" or os.environ.get("OUTREACH_LIVE", "").strip().lower() in ("1", "true", "yes")
         self.live = live

@@ -1,4 +1,4 @@
-# The business: Google review stands for restaurants, cafés and salons
+# The business: Google review QR codes for restaurants, cafés and salons
 
 Research and recommendations, 8 October 2026. Prices and figures are from the sources linked. Check them before
 you quote them to a customer.
@@ -70,17 +70,21 @@ Sources: [it-finanzmagazin](https://www.it-finanzmagazin.de/?p=250275),
 
 ## 3. Price and packages
 
-Your range of $100–200 fits. It is one-time, which beats the monthly tools (section 4). Prices in US dollars,
-paid by card or PayPal; the same in other English-speaking markets:
+**Decided 10 October 2026 (brand: Qrated):** two one-time packages, and nothing is shipped. Stands can't be sent
+from India to the US or Europe at a sensible cost, so the business gets its QR code as print-ready files and prints
+it itself. Prices in US dollars, paid by card or PayPal; the same in other English-speaking markets:
 
-| Package | What they get | Suggested price |
+| Package | What they get | Price |
 |---|---|---|
-| **Digital** | Their page (pay/review/menu), QR codes as print-ready table cards (PDF) to print themselves, setup of their Google review link | $99 |
-| **Stands** | Digital + 5 acrylic QR/NFC stands delivered | $149 |
-| **Stands + guests** | Stands + WhatsApp/SMS review requests set up (consent text for their booking form, one-tap page), 12 months of link changes | $199 |
+| **Starter** | Their QR code, linked straight to their Google review page; print-ready QR designs for tables, counter, window and receipts; review tracking: a report of new reviews and rating every month for 12 months | $100 |
+| **Pro** | Starter + review requests to their own customer list by WhatsApp and e-mail (up to 3 reminders), with their Google review link or a short feedback form | $200 |
 
-Extras: more stands at about $15 each. Paid WhatsApp sending is passed on at cost; Meta's price per message
-differs by country, about €0.11 in Germany.
+Paid WhatsApp sending (Meta's WhatsApp Business Platform) is passed on at cost if a customer wants it fully
+automatic; Meta's price per message differs by country, about €0.11 in Germany. Review tracking needs the
+business's Google rating and review count once a month: from Google Maps by hand, or from the Google Places API
+(free monthly allowance; needs a Google Cloud billing account).
+
+The earlier plan (below, kept for the research) had acrylic NFC stands; it was dropped for the reason above.
 
 **Your costs per customer.**
 
@@ -106,13 +110,13 @@ differs by country, about €0.11 in Germany.
 Our niche sits between a bare €15 stand and a €300 monthly suite:
 
 - a one-time price;
-- a stand that can be re-pointed;
-- payment and review on one page;
+- a QR code that opens the Google review page directly;
+- review tracking and reminders to past customers;
 - German and English;
 - built within Google's rules.
 
 Be honest with customers. Google gives every business a free review link and QR code. What we add is the
-stands, the page, the setup, the changes and the guest messages.
+print-ready designs, the setup, the review tracking and the guest messages.
 
 <a id="sources-for-section-3-and-4"></a>Sources: [CostBench: Birdeye](https://costbench.com/software/review-management/birdeye),
 [CostBench: Birdeye vs Podium](https://costbench.com/compare/birdeye-vs-podium/),

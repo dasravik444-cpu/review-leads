@@ -33,6 +33,7 @@ venv/
 node_modules/
 
 # your copy of the sales PDF with your phone number (not for the public repository)
+Qrated-overview*
 GuestEcho-overview*
 
 # Running on your own computer (docs/LOCAL.md): keys and lead data stay on the computer

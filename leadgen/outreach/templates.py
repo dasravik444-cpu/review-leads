@@ -33,7 +33,7 @@ EN = {
 
 {intro} {hook}
 
-That's what we fix: a small QR + tap stand on your tables opens your Google review page in one tap, right before guests pay. Google counts reviews and rating in its local ranking, so more reviews help {business} show up higher on Google Maps.
+That's what we fix: a QR code on your tables, counter and receipts opens your Google review page in one scan. Google counts reviews and rating in its local ranking, so more reviews help {business} show up higher on Google Maps, and they show new customers you can be trusted.
 
 {offer} {attachment_note}
 
@@ -66,24 +66,24 @@ WhatsApp/phone: {sender_phone}
 {source_line}
 Not interested? Just reply "no" and we won't write again.""",
     "source_line": "We found this address on your website or public listing; reply \"delete\" and we erase it.",
-    "offer": "It's a one-time price from $99, no monthly fees.",
+    "offer": "It's a one-time price from $100, no monthly fees.",
     "attachment_note": "I've attached a two-page overview (PDF) with pictures of how it works.",
     "intro_usp": 'I came across {business} and liked this line on your website: "{usp}".',
     "intro_plain": "I came across {business} while looking at {audience} in {place}.",
     "greeting_named": "Hi {first_name},",
     "greeting_team": "Hello {business} team,",
     "whatsapp_cold": ("Hi {business} team, I'm {sender_first} from {sender_business}. We help {audience} get more Google reviews "
-                      "with a simple, Google-compliant QR/tap stand. Could I send you a free preview? If you'd rather not "
+                      "with a simple, Google-compliant QR code. Could I send you a free preview? If you'd rather not "
                       "get messages from us, just reply STOP."),
     "whatsapp_opted_in": ("Hi {first_name_or_team}, this is {sender_first} from {sender_business} - thanks for your reply! "
                           "Here is the free preview for {business}: {demo_link} Happy to answer any questions here."),
     "letter": """{greeting}
 
-Many happy guests would leave a review - they just don't think of it. We set up a small QR and tap (NFC) stand for the tables and the counter at {business}: one scan opens your Google review page. If you take payments by link (PayPal, Square, Stripe, SumUp), your payment link sits right next to it.
+Many happy guests would leave a review - they just don't think of it. We make a QR code for the tables, the counter and the receipts at {business}: one scan opens your Google review page. You print it yourself, as often as you like.
 
 - No app, no discounts or prize draws: every guest is asked the same way, as Google requires.
 - {offer}
-- We can change the link at any time without reprinting the stands.
+- We track your new Google reviews and send you a short report every month.
 
 See a free preview for {business}: {demo_link}
 Or message us on WhatsApp: {sender_phone}
@@ -137,7 +137,7 @@ DE = {
 
 vielen Dank für Ihr Interesse. Wie versprochen hier kurz, wie es funktioniert:
 
-Wir richten für {business} kleine QR- und NFC-Aufsteller für Tische und Theke ein. Ein Scan oder Antippen öffnet Ihre Google-Bewertungsseite. Wenn Sie Zahlungen per Link annehmen (PayPal, SumUp, Stripe), steht Ihr Zahlungslink direkt daneben. Ohne App, ohne Rabatte oder Gewinnspiele - jeder Gast wird gleich gefragt, so wie Google es verlangt.
+Wir erstellen für {business} einen QR-Code für Tische, Theke und Kassenbon. Ein Scan öffnet Ihre Google-Bewertungsseite. Ohne App, ohne Rabatte oder Gewinnspiele - jeder Gast wird gleich gefragt, so wie Google es verlangt.
 
 {offer}
 
@@ -174,11 +174,11 @@ Kein Interesse mehr? Antworten Sie einfach mit "Nein" - dann melden wir uns nich
 
 {greeting}
 
-viele zufriedene Gäste würden gern eine Bewertung schreiben - sie denken nur nicht daran. Wir richten für {business} kleine QR- und NFC-Aufsteller für Tische und Theke ein: Ein Scan, und Ihre Google-Bewertungsseite öffnet sich. Wenn Sie Zahlungen per Link annehmen (PayPal, SumUp, Stripe), steht Ihr Zahlungslink gleich daneben.
+viele zufriedene Gäste würden gern eine Bewertung schreiben - sie denken nur nicht daran. Wir erstellen für {business} einen QR-Code für Tische, Theke und Kassenbon: Ein Scan, und Ihre Google-Bewertungsseite öffnet sich. Sie drucken ihn selbst, so oft Sie möchten.
 
 - Ohne App, ohne Rabatte oder Gewinnspiele: Jeder Gast wird gleich gefragt, so wie Google es verlangt.
 - {offer}
-- Den Link können wir jederzeit ändern, ohne neue Aufsteller zu drucken.
+- Wir verfolgen Ihre neuen Google-Bewertungen und schicken Ihnen jeden Monat einen kurzen Bericht.
 
 Ihre kostenlose Vorschau: {demo_link}
 Oder schreiben Sie uns per WhatsApp: {sender_phone}
