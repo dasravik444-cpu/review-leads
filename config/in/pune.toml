@@ -1,0 +1,14 @@
+# Pune - one city of the India campaign (config/in/fleet.toml). Shared settings: _base.toml.
+# Made by scripts/make_in_cities.py - edit the list there and run it again.
+include = ["../shared/categories.toml", "_base.toml"]
+
+[campaign]
+id = "in-pune"
+timezone = "Asia/Kolkata"
+lead_id_prefix = "PNQ"
+
+[area]
+name = "Pune"
+aliases = ["Koregaon Park", "Kalyani Nagar", "Baner", "Viman Nagar", "Aundh"]
+center = [18.5204, 73.8567]
+radius_km = 15

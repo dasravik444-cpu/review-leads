@@ -1,0 +1,149 @@
+# Shared settings for every India city campaign (config/in/<city>.toml includes this file).
+#
+# Focus: PREMIUM cafés, restaurants, bars and lounges, bakeries, salons and spas, and gyms - the places that can
+# pay for their reputation. The open data has no price level, so "premium" is kept by what can be checked:
+#   - a business goes to the Sheet only with its own website or an Instagram account ([sheets] require_presence);
+#     the long tail without either rarely pays for online reputation;
+#   - street food, fast food, dhabas, canteens, tea stalls and budget "parlours" are left out (names and categories);
+#   - big chains are left out (their head office decides);
+#   - each city is searched from its centre outwards, where the upmarket districts are.
+# All India cities write into the SAME Google Sheet as the US, but into their own tabs ("India Leads", "India Daily
+# Report", the "India ..." outreach tabs), so the two markets never mix.
+#
+# India rules (docs/COMPLIANCE.md): no cold e-mail law for businesses - say who you are and honour "no"; TRAI rules
+# cover calls and SMS (not used); WhatsApp: one by one, by hand (docs/WHATSAPP.md).
+
+[campaign]
+country = "IN"
+language = "en"
+region = "in"
+
+[plan]
+days = 10
+daily_target = "auto"
+order = "center_out"
+min_cell_km = 1.0
+max_cell_km = 6.0
+split_threshold = 60
+finish_scheduled_part = true
+
+[compliance]
+mode = "open-data"       # Overture Maps + OpenStreetMap + the businesses' own websites (no Google scraping)
+
+[open_data]
+min_confidence = 0.5
+refresh_days = 30
+# Budget formats the premium focus leaves out (codes that do not exist in the data simply match nothing).
+exclude_codes = ["fast_food_restaurant", "food_truck", "food_truck_stand", "food_stand", "street_vendor", "food_court",
+                 "kebab_shop", "sandwich_shop", "pizza_delivery_service", "cafeteria", "internet_cafe", "hookah_bar",
+                 "candy_store", "smoothie_juice_bar"]
+
+[filters]
+require_contact = true
+exclude_closed = true
+allow_unmatched_categories = false
+# Chains decide centrally - poor leads. (Brands known to the open data are also skipped automatically.)
+# Premium salon franchises (outlets run by their own owners) are kept on purpose: top salons are the target.
+exclude_chains = [
+  # food & drink
+  "cafe coffee day", "ccd", "starbucks", "barista lavazza", "barista coffee", "costa coffee", "chaayos", "chai point", "third wave coffee",
+  "blue tokai", "tim hortons", "mcdonald", "kfc", "burger king", "domino", "pizza hut", "subway", "taco bell",
+  "wow momo", "faasos", "behrouz biryani", "biryani by kilo", "haldiram", "bikanervala", "sagar ratna",
+  "barbeque nation", "mainland china", "theobroma", "mad over donuts", "dunkin", "baskin robbins", "keventers",
+  "burger singh", "goli vada pav", "jumboking", "la pino'z", "oven story", "the belgian waffle", "krispy kreme",
+  "chai sutta bar", "adyar ananda bhavan", "a2b", "saravana bhavan", "rameshwaram cafe", "hard rock cafe",
+  "naturals ice cream",
+  # budget salon chains and company-run gyms
+  "jawed habib", "green trends", "naturals salon", "cult fit", "cultfit", "anytime fitness", "gold's gym",
+  "snap fitness", "talwalkars", "f45",
+]
+# Whole words (a plural counts too; "word*" matches every word starting with it).
+exclude_name_words = ["dhaba", "canteen", "mess", "tiffin", "tea stall", "chai stall", "tea point", "juice centre",
+                      "juice center", "juice corner", "fast food", "chaat", "momo", "roll centre", "roll center",
+                      "street food", "paan", "pan shop", "beauty parlour", "beauty parlor", "ladies parlour",
+                      "gents parlour", "unisex parlour", "saloon", "hair cutting", "bhojanalaya", "bhojnalaya",
+                      "wine shop", "liquor"]
+
+[enrich]
+website = true
+max_pages_per_site = 6
+social_search = false
+instagram_profile = false
+check_email_mx = true
+role_email_candidates = true
+email_hunt = true
+email_archive = true
+email_search = true      # a web search for an address the business published elsewhere (see config/us/_base.toml)
+workers = 12
+site_interval_s = 2.0
+search_interval_s = 12.0
+
+[crawler]
+bot_name = "ReviewLeadBot"
+contact_url = ""
+
+[sheets]
+enabled = true
+leads_tab = "India Leads"
+plan_tab = ""
+report_tab = "India Daily Report"
+require_any = ["email", "whatsapp", "phone"]   # a way to reach them
+require_presence = ["website", "instagram"]    # ... and their own website or Instagram: the premium focus
+checkpoint_minutes = 20
+
+[runtime]
+time_budget_minutes = 120
+safety_margin_minutes = 6
+use_curl_cffi = false
+
+[outreach]
+mode = "dry-run"
+offer = "It's a one-time price from ₹3,000, no monthly fees."
+demo_url = ""
+privacy_url = ""
+
+[outreach.tabs]
+outreach = "India Outreach"
+preview = "India Email Preview"
+replies = "India Replies"
+whatsapp = "India WhatsApp Queue"
+dnc = "Do Not Contact"              # shared with the US: a "no" counts everywhere
+report = "India Outreach Report"
+letters = "India Letters"
+
+[outreach.sender]
+name = "Ravik"
+business = "Aurenflow"
+city = "Kolkata"
+phone = ""               # secret OUTREACH_SENDER_PHONE (your WhatsApp Business number)
+postal_address = ""      # not required in India
+website = ""
+notify_email = ""
+
+[outreach.email]
+# Ready, but PAUSED until the India e-mail and PDF are approved (the robot reads replies; it sends nothing).
+enabled = false
+start_per_day = 15
+step = 5
+step_every_days = 3
+max_per_day = 40
+window_start = "10:30"
+window_end = "18:30"
+days = ["mon", "tue", "wed", "thu", "fri", "sat"]
+follow_up_days = [3, 7]
+footer = """{sender_business}
+WhatsApp: {sender_phone}
+
+Not interested? Reply "no" and we won't e-mail again."""
+
+[outreach.whatsapp]
+# Indian businesses live on WhatsApp: their mobile numbers are queued too (one by one, by hand: docs/WHATSAPP.md).
+# A new number starts small and grows with the days you actually send, so it is not reported and banned.
+start_per_day = 10
+step = 5
+step_every_days = 5
+max_per_day = 40
+include_mobiles = true
+
+# Restaurants, cafés, bars, bakeries, salons and gyms are on by default (config/shared/categories.toml); the
+# rest stays off for the premium focus.

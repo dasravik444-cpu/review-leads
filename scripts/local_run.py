@@ -1,9 +1,9 @@
 """Run the lead search, the e-mail hunt and the outreach on your own computer (free, and within GitHub's terms).
 
     python scripts/local_run.py check                 are the keys in .env right? (Google Sheet, Gmail)
-    python scripts/local_run.py leads                 the next 3 US cities, about an hour each, then their e-mail hunt
-    python scripts/local_run.py leads --cities austin,miami --minutes 60 --hunt-minutes 30
-    python scripts/local_run.py emails                today's e-mails, replies and follow-ups (US working hours only)
+    python scripts/local_run.py leads                 the next 3 cities, about an hour each, then their e-mail hunt
+    python scripts/local_run.py leads --cities kolkata,mumbai --minutes 60 --hunt-minutes 30
+    python scripts/local_run.py emails                today's e-mails, replies and follow-ups (office hours only)
     python scripts/local_run.py emails --dry-run      only prepares them, in the Sheet's "Email Preview" tab
     python scripts/local_run.py emails --max 1 --copy-to me@example.com   one e-mail, and a blind copy to you
     python scripts/local_run.py emails --check        only reads replies and bounces (any time of day)
@@ -13,6 +13,7 @@
 
 Your keys live in settings.txt in the main folder (the first run makes it from settings-example.txt); the Google
 key file (.json) goes into the secrets folder and is found by itself. Each city's memory is a file in data/.
+MARKET=in (the default) works on Indian cities, MARKET=us on US cities (leadgen/market.py).
 Nothing here needs GitHub: GitHub only stores the code. (docs/LOCAL.md explains it all.)
 """
 from __future__ import annotations
@@ -40,13 +41,14 @@ except ImportError:
 
 ROOT = Path(__file__).resolve().parent.parent
 DATA = ROOT / "data"
+sys.path.insert(0, str(ROOT))
+from leadgen import market as markets  # noqa: E402 - India or the US (settings.txt MARKET), leadgen/market.py
+
 BUSY = 3                               # exit code: another job (the robot, or one typed by hand) is running
-US_TIME = ZoneInfo("America/Chicago")
 INDIA = ZoneInfo("Asia/Kolkata")
 TITLES = {"leads": "lead search", "hunt": "e-mail hunt", "emails": "e-mail sending", "import": "import"}
-SEND_HOURS = (8.5, 16.5)            # US Central time, Monday to Friday (the outreach config's own window is 09:30-16:30)
 KEYS = ("RQ_SHEET_ID", "GOOGLE_SERVICE_ACCOUNT_FILE", "OUTREACH_GMAIL_ADDRESS", "OUTREACH_GMAIL_APP_PASSWORD",
-        "OUTREACH_SENDER_PHONE", "OUTREACH_POSTAL_ADDRESS")
+        "OUTREACH_SENDER_PHONE", "OUTREACH_POSTAL_ADDRESS")      # the postal address: US e-mails only (CAN-SPAM)
 
 
 def key_email(path: Path) -> str:
@@ -121,11 +123,21 @@ def load_env(*paths: Path) -> list[str]:
         os.environ.pop("GOOGLE_SERVICE_ACCOUNT_FILE", None)
     os.environ.setdefault("PYTHONUTF8", "1")              # business names in any script, also on Windows
     os.environ.setdefault("PYTHONIOENCODING", "utf-8")
-    return [k for k in KEYS if not os.environ.get(k)]
+    needed = [k for k in KEYS if k != "OUTREACH_POSTAL_ADDRESS" or market().code == "us"]
+    return [k for k in needed if not os.environ.get(k)]
+
+
+def market() -> markets.Market:
+    return markets.current()
+
+
+def conf(name: str) -> str:
+    """A campaign file of the market: conf("kolkata") -> "config/in/kolkata.toml"."""
+    return f"config/{market().code}/{name}.toml"
 
 
 def _fleet_file() -> dict:
-    return tomllib.loads((ROOT / "config" / "us" / "fleet.toml").read_text(encoding="utf-8"))
+    return tomllib.loads((ROOT / conf("fleet")).read_text(encoding="utf-8"))
 
 
 def fleet() -> list[str]:
@@ -145,11 +157,9 @@ def next_cities(n: int, cities: list[str] | None = None, done_elsewhere: list[st
     return sorted(cities, key=lambda c: (last_run(c), order[c]))[:n]
 
 
-def us_working_hours(now: datetime | None = None) -> tuple[bool, str]:
-    now = (now or datetime.now(US_TIME)).astimezone(US_TIME)
-    hour = now.hour + now.minute / 60
-    ok = now.weekday() < 5 and SEND_HOURS[0] <= hour < SEND_HOURS[1]
-    return ok, now.strftime("%A %H:%M") + " in Chicago"
+def working_hours(now: datetime | None = None) -> tuple[bool, str]:
+    """The businesses' office hours in the market (US: Chicago 08:30-16:30 Mon-Fri; India: 10:00-18:30 Mon-Sat)."""
+    return market().is_working_time(now)
 
 
 def leadgen(*args: str) -> int:
@@ -165,10 +175,11 @@ def cmd_check(_a) -> int:
         print("Google keys in the secrets folder:")
         for key in keys:
             print(f"  {key.name} ({key_email(key)})" + ("  <- used" if str(key) == used else ""))
-    code = leadgen("doctor", "--config", "config/us/austin.toml", "--db", str(DATA / "austin.sqlite"), "--require-sheet",
+    print(f"Market: {market().name} (MARKET in settings.txt)")
+    code = leadgen("doctor", "--config", conf(fleet()[0]), "--db", str(DATA / "check.sqlite"), "--require-sheet",
                    "--sheet-test")
     print("\nGmail: preparing one e-mail (nothing is sent) to test the login...")
-    code2 = leadgen("outreach", "--config", "config/us/outreach.toml", "--db", str(DATA / "outreach.sqlite"),
+    code2 = leadgen("outreach", "--config", conf("outreach"), "--db", str(DATA / market().outreach_db),
                     "--mode", "dry-run", "--max-emails", "1")
     return code or code2
 
@@ -183,11 +194,12 @@ def cmd_leads(a) -> int:
     print(f"Cities this time: {', '.join(wanted)} ({a.minutes:.0f} min search + {a.hunt_minutes:.0f} min e-mail hunt each)")
     worst = 0
     for city in wanted:
-        common = ["--config", f"config/us/{city}.toml", "--db", str(DATA / f"{city}.sqlite")]
+        common = ["--config", conf(city), "--db", str(DATA / f"{city}.sqlite")]
         worst = max(worst, leadgen("run", *common, "--budget-minutes", str(a.minutes)))
         if a.hunt_minutes > 0:
             worst = max(worst, leadgen("email-hunt", *common, "--limit", "1500", "--budget-minutes", str(a.hunt_minutes)))
-    print("\nDone. The new leads are in your Google Sheet (Leads tab); each city's memory is in the data folder.")
+    tab = "India Leads" if market().code == "in" else "Leads"
+    print(f"\nDone. The new leads are in your Google Sheet ({tab} tab); each city's memory is in the data folder.")
     return worst
 
 
@@ -262,7 +274,7 @@ def cmd_hunt(a) -> int:
             break
         minutes = min(left, max(15.0, a.minutes / 2))
         print(f"\n{city}: {n} businesses without an e-mail not looked at yet ({minutes:.0f} min)")
-        worst = max(worst, leadgen("email-hunt", "--config", f"config/us/{city}.toml", "--db", str(DATA / f"{city}.sqlite"),
+        worst = max(worst, leadgen("email-hunt", "--config", conf(city), "--db", str(DATA / f"{city}.sqlite"),
                                    "--limit", "1500", "--budget-minutes", f"{minutes:.0f}"))
     return worst
 
@@ -271,23 +283,25 @@ def attachment() -> Path:
     """The PDF for first e-mails: your own copy (with your number), once `import` took it from Downloads, else the
     one in the code. Whichever is newer: a new PDF in the code (after  update ) replaces an older copy of yours until
     you import your copy of the new one."""
-    own, public = DATA / "attachment.pdf", ROOT / "marketing" / "pitch.pdf"
+    m = market()
+    own, public = DATA / f"attachment{m.pdf_suffix}.pdf", ROOT / "marketing" / f"pitch{m.pdf_suffix}.pdf"
     if own.is_file() and (not public.is_file() or own.stat().st_mtime >= public.stat().st_mtime):
         return own
     return public
 
 
 def cmd_emails(a) -> int:
-    ok, when = us_working_hours()
+    m = market()
+    ok, when = working_hours()
     if not ok and not a.now and not a.check:
-        print(f"It is {when}: outside US working hours (Monday-Friday 08:30-16:30 there).\n"
-              "E-mails that arrive at night look like spam. Run this again then (from India: about 8 PM to 3 AM),\n"
+        print(f"It is {when}: outside office hours in {m.name}.\n"
+              f"E-mails that arrive at night look like spam. Run this again then ({m.india_time}),\n"
               "or add --now to send anyway.")
         return 0
-    args = ["outreach", "--config", "config/us/outreach.toml", "--db", str(DATA / "outreach.sqlite"),
+    args = ["outreach", "--config", conf("outreach"), "--db", str(DATA / m.outreach_db),
             "--mode", "dry-run" if a.dry_run else "live"]
     # Without --max, each run sends its share of today's limit (15 a day at first, rising slowly to 40), a few
-    # minutes apart, spread over the US working day: the robot runs this every hour.
+    # minutes apart, spread over the businesses' working day: the robot runs this every hour.
     if a.check:
         args += ["--max-emails", "0"]
     elif a.max is not None:
@@ -329,19 +343,21 @@ def cmd_import(a) -> int:
     folders = [Path(f) for f in a.folder] if a.folder else download_folders()
     found = lambda pattern: sorted({f for d in folders for f in d.glob(pattern) if f.is_file()},  # noqa: E731
                                    key=lambda f: f.stat().st_mtime)
-    pdfs = sorted(found("Aurenflow-overview*.pdf") + found("Qrated-overview*.pdf") + found("GuestEcho-overview*.pdf"),
-                  key=lambda f: f.stat().st_mtime)
+    m = market()
+    pdfs = sorted((f for pattern in m.own_pdfs for f in found(pattern)), key=lambda f: f.stat().st_mtime)
     if pdfs:                           # needs no lock: an e-mail run going on now reads the old or the new file whole
-        tmp = DATA / "attachment.pdf.new"
+        own = DATA / f"attachment{m.pdf_suffix}.pdf"
+        tmp = own.with_name(own.name + ".new")
         shutil.copyfile(pdfs[-1], tmp)
-        os.replace(tmp, DATA / "attachment.pdf")
-        print(f"Your PDF {pdfs[-1].name} is attached to first e-mails from now on.")
+        os.replace(tmp, own)
+        print(f"Your PDF {pdfs[-1].name} is attached to first e-mails to {m.name} from now on.")
     lists = [str(f) for f in found("leads-*.zip") + found("leads-*.csv")]
     if not lists:
         print("No lead list (leads-<city>.zip or .csv) in " + ", ".join(map(str, folders)) + ". Download it first "
               "(docs/LOCAL.md, \"Lead lists from GitHub\").")
         return 0 if pdfs else 1
     print("Lead lists: " + ", ".join(Path(f).name for f in lists))
+    # Lead lists come from the US searches on GitHub (docs/LOCAL.md); any US city file knows their Sheet tabs.
     with job_lock("import", wait=True):  # the Sheet gets one writer at a time: after the robot's job, if one runs
         return leadgen("import-leads", "--config", "config/us/austin.toml", *lists,
                        *(["--dry-run"] if a.dry_run else []))
@@ -354,7 +370,7 @@ def cmd_whatsapp(a) -> int:
     from leadgen.outreach import wa_queue
     from leadgen.sheets import SheetsClient
 
-    cfg = load_config(str(ROOT / "config" / "us" / "outreach.toml"))
+    cfg = load_config(str(ROOT / conf("outreach")))
     client, tab = SheetsClient(cfg.sheet_id), cfg["outreach"]["tabs"]["whatsapp"]
     if a.action == "mark":
         row = wa_queue.mark(client, tab, a.row, "" if a.key == "-" else a.key, a.number, a.result)
@@ -367,13 +383,14 @@ def cmd_whatsapp(a) -> int:
             # one line for android/whatsapp.sh: tab-separated, no field empty (bash would merge two tabs)
             print("\t".join(" ".join(str(it[k]).split()) or "-" for k in ("row", "key", "number", "lead_id", "business", "link")))
         return 0
-    ok, when = us_working_hours()
+    m = market()
+    ok, when = working_hours()
     print(f"WhatsApp Queue: {len(items)} message{'' if len(items) == 1 else 's'} to send.")
     for it in items[:15]:
         print(f"  {it['lead_id']:<11} {it['business'][:34]:<35} {it['number']:<17} {it['why']}")
     if items and not ok and not a.now:
-        print(f"\nIt is {when}: outside US office hours. A message at night looks like spam - send them between "
-              "about 8 PM and 2 AM India time on US working days (or add --now).")
+        print(f"\nIt is {when}: outside office hours in {m.name}. A message at night looks like spam - send them "
+              f"{m.india_time} (or add --now).")
         return 4
     return 0
 
@@ -382,16 +399,16 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("check", help="test the keys in .env (Google Sheet and Gmail)")
-    le = sub.add_parser("leads", help="find businesses in the next US cities and look for their e-mail addresses")
+    le = sub.add_parser("leads", help="find businesses in the next cities and look for their e-mail addresses")
     le.add_argument("--count", type=int, default=3, help="how many cities this time (default 3)")
-    le.add_argument("--cities", default="", help="these cities instead, e.g. austin,miami")
+    le.add_argument("--cities", default="", help="these cities instead, e.g. kolkata,mumbai")
     le.add_argument("--minutes", type=float, default=60.0, help="search time per city (default 60)")
     le.add_argument("--hunt-minutes", type=float, default=30.0, help="e-mail hunt time per city (default 30)")
     hu = sub.add_parser("hunt", help="more e-mail hunting in cities searched before")
     hu.add_argument("--minutes", type=float, default=60.0, help="time for all cities together (default 60)")
     em = sub.add_parser("emails", help="send today's e-mails, read replies, send follow-ups")
     em.add_argument("--dry-run", action="store_true", help="only prepare the e-mails (Email Preview tab)")
-    em.add_argument("--now", action="store_true", help="also outside US working hours")
+    em.add_argument("--now", action="store_true", help="also outside office hours")
     em.add_argument("--max", type=int, default=None, help="this many new e-mails now (default: this hour's share)")
     em.add_argument("--attach-pdf", action="store_true", help=argparse.SUPPRESS)      # the PDF is attached anyway now
     em.add_argument("--no-pdf", action="store_true", help="first e-mails without the PDF")
@@ -400,7 +417,7 @@ def main(argv=None) -> int:
     wa = sub.add_parser("whatsapp", help="the WhatsApp Queue: what to send, the next message, a result (sends nothing)")
     wa_sub = wa.add_subparsers(dest="action", required=True)
     wl = wa_sub.add_parser("list", help="the messages waiting")
-    wl.add_argument("--now", action="store_true", help="also outside US office hours")
+    wl.add_argument("--now", action="store_true", help="also outside office hours")
     wa_sub.add_parser("next", help="the next message, as one line for the tablet")
     wm = wa_sub.add_parser("mark", help="the result of one message")
     wm.add_argument("row", type=int)

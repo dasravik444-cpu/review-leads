@@ -1,6 +1,8 @@
 """The sales PDF for businesses: two pages, US Letter.
 
     python marketing/build_pitch.py                      # -> marketing/pitch.pdf (details from marketing/pitch.json)
+    python marketing/build_pitch.py --market in          # -> marketing/pitch-in.pdf: the India version (rupee prices
+                                                         #    and the monthly review report; "markets" in pitch.json)
     python marketing/build_pitch.py --png                # also page images, to check the layout
     python marketing/build_pitch.py --phone "+1 ..."     # override a detail for one build
     python marketing/build_pitch.py --brand-files        # also the logo as pictures (marketing/brand/)
@@ -436,25 +438,78 @@ h2 {{ font-family: PitchInter, Inter, sans-serif; font-size: 21px; letter-spacin
 .qr {{ background: #fff; border-radius: 12px; padding: 8px; text-align: center; }}
 .qr svg {{ width: 84px; height: 84px; display: block; margin: 0 auto; }}
 .qr small {{ display: block; color: {INK}; font-size: 8.4px; font-weight: 700; margin-top: 3px; }}
+/* the monthly review report (India version): page 2 gets a little tighter to make room */
+.reports .sec {{ margin-top: 7px; }}
+.reports .why {{ grid-template-columns: 168px 1fr; margin-top: 6px; }}
+.reports .maps {{ width: 168px; height: 175px; }}
+.reports .facts {{ gap: 6px; }}
+.reports .fact {{ padding: 6px 13px; }}
+.reports .fact p {{ font-size: 10.6px; line-height: 1.34; }}
+.reports .guests {{ grid-template-columns: 154px 30px 74px 30px 1fr; margin-top: 4px; }}
+.reports .list {{ width: 154px; height: 137px; }}
+.reports .chat {{ width: 74px; height: 148px; }}
+.reports .timeline li {{ padding-bottom: 3px; font-size: 10.1px; line-height: 1.28; }}
+.reports .timeline li b {{ font-size: 11px; }}
+.reports .prices {{ margin-top: 8px; }}
+.reports .cta {{ margin-top: 8px; padding: 10px 20px; }}
+.report {{ display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 7px; }}
+.rcard {{ background: {LAVENDER}; border-radius: 14px; padding: 8px 12px; display: grid; grid-template-columns: 30px 1fr;
+         gap: 9px; align-items: center; }}
+.rcard svg {{ width: 30px; height: 30px; display: block; }}
+.rcard p {{ font-size: 10.4px; color: #334155; line-height: 1.32; }}
+.rcard p b {{ display: block; color: {INK}; font-size: 11.6px; }}
+.report-note {{ font-size: 9px; color: {MUTED}; margin-top: 4px; }}
 """
 
 
 def font_faces() -> str:
     """Inter as embedded web fonts (SIL OFL, marketing/fonts): Chromium writes them into the PDF as real TrueType fonts.
-    (Installed OpenType/CFF fonts end up as blurrier Type 3 fonts.)"""
+    (Installed OpenType/CFF fonts end up as blurrier Type 3 fonts.) The Latin set has no rupee sign: the
+    inter-rupee-* files hold just that glyph, cut from Inter 4 and converted to TrueType outlines."""
     import base64
 
     out = []
-    for f in sorted((HERE / "fonts").glob("inter-latin-*-normal.woff2")):
+    for f in sorted((HERE / "fonts").glob("inter-*-normal.woff2")):
         weight = f.name.split("-")[2]
         data = base64.b64encode(f.read_bytes()).decode("ascii")
-        out.append(f"@font-face {{ font-family: PitchInter; font-weight: {weight}; font-style: normal; "
+        only = " unicode-range: U+20B9;" if "-rupee-" in f.name else ""
+        out.append(f"@font-face {{ font-family: PitchInter; font-weight: {weight}; font-style: normal;{only} "
                    f"src: url(data:font/woff2;base64,{data}) format('woff2'); }}")
     return "\n".join(out)
 
 
+def report_icon(kind: str) -> str:
+    """The small pictures of the monthly review report: new reviews, star rating, what the profile brings in."""
+    if kind == "reviews":
+        inner = (f'<rect x="6" y="9" width="28" height="22" rx="5" fill="#fff" stroke="{VIOLET}" stroke-width="2.4"/>'
+                 f'<path d="M12 31 l-2 7 8 -7" fill="#fff" stroke="{VIOLET}" stroke-width="2.4" stroke-linejoin="round"/>'
+                 f'<path d="M14 20 h12 M20 14 v12" stroke="{NAVY}" stroke-width="3" stroke-linecap="round"/>')
+    elif kind == "rating":
+        inner = (f'<path d="M6 34 V8 M6 34 H36" stroke="{NAVY}" stroke-width="2.4" stroke-linecap="round" fill="none"/>'
+                 f'<path d="M10 28 L18 22 L24 25 L34 13" stroke="{VIOLET}" stroke-width="3" fill="none" stroke-linecap="round" '
+                 'stroke-linejoin="round"/>' + star(33, 9, 5.5))
+    else:
+        inner = (f'<path d="M20 4 C12 4 7 10 7 16 C7 25 20 37 20 37 C20 37 33 25 33 16 C33 10 28 4 20 4z" fill="{VIOLET}"/>'
+                 '<circle cx="20" cy="16" r="5" fill="#fff"/>')
+    return f'<svg viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">{inner}</svg>'
+
+
+def report_section() -> str:
+    return f"""<div class="sec"><div class="row"><h2>We track your Google reviews, every month</h2>
+<div class="sub nowrap">12 months of reports, in Starter and Pro</div></div>
+<div class="report">
+<div class="rcard">{report_icon("reviews")}<p><b>How many new reviews</b>you got on Google this month, and your total.</p></div>
+<div class="rcard">{report_icon("rating")}<p><b>Your star rating</b>month by month, so you see it climb.</p></div>
+<div class="rcard">{report_icon("profile")}<p><b>What it brings you</b>calls, directions and website visits from Google.*</p></div>
+</div>
+<div class="report-note">* Google's own figures for your Business Profile: add us as a manager to share them (you can remove us
+any time).</div></div>"""
+
+
 def build_html(d: dict) -> str:
     brand, business = d["brand"], d.get("example_business") or "Joe's Diner"
+    starter, pro = d.get("price_starter") or "$100", d.get("price_pro") or "$200"
+    reports = bool(d.get("review_report"))
     name, email, phone_no = d.get("name", ""), d.get("email", ""), d.get("phone", "")
     qr_demo = d.get("qr_demo") or "https://example.com/"
     # The code on page 2 opens an e-mail to us (or a WhatsApp chat when a phone number is set).
@@ -519,7 +574,7 @@ in return for a review. No fake, paid or filtered reviews, ever.</div></div>
 <div class="foot"><span>{disclaimer}</span><span>1 / 2</span></div>
 </section>"""
 
-    page2 = f"""<section class="page">
+    page2 = f"""<section class="page{' reports' if reports else ''}">
 {top}
 <div class="sec"><h2>Why Google reviews bring you customers</h2>
 <div class="why">{maps_visual()}
@@ -543,17 +598,17 @@ feedback form, on WhatsApp and e-mail, and follow up for you.</div>
 <li><b>Day 9 · Last reminder</b>Then we stop: up to 3 reminders in total.</li>
 <li class="stop"><b>Reply STOP, and it stops</b>Only customers who agreed to hear from you.</li>
 </ol></div></div>
-
+{report_section() if reports else ""}
 <div class="sec"><div class="row"><h2>One-time price. No monthly fees.</h2>
 <div class="sub nowrap">Leading review platforms start at $299–$399 a month.</div></div>
 <div class="prices">
 <div class="price"><h4>Starter</h4><div class="for">More reviews from the customers in front of you</div>
-<div class="amt">$100<small>one-time</small></div><ul>
+<div class="amt">{esc(starter)}<small>one-time</small></div><ul>
 <li><b>Your QR code</b>, linked straight to your Google review page</li>
 <li>Print-ready QR designs for tables, counter, window and receipts: print them anywhere</li>
 <li><b>Review tracking:</b> a report of your new reviews and rating every month for 12 months</li></ul></div>
 <div class="price pop"><span class="badge">MOST POPULAR</span><h4>Pro</h4><div class="for">Also reaches the customers who already left</div>
-<div class="amt">$200<small>one-time</small></div><ul>
+<div class="amt">{esc(pro)}<small>one-time</small></div><ul>
 <li><b>Everything in Starter</b></li>
 <li><b>WhatsApp and e-mail review requests</b> to your customer list, with up to 3 friendly reminders</li>
 <li>Your Google review link or a short feedback form: your choice</li></ul></div>
@@ -561,7 +616,7 @@ feedback form, on WhatsApp and e-mail, and follow up for you.</div>
 </div>
 
 <div class="cta"><div><h2>See it with your business's name on it, free.</h2>
-<p>Reply “yes” to our e-mail or scan the code, and we'll send you a free preview: your own QR design with your
+<p>Reply “yes” to our {esc(d.get("reply_to") or "e-mail")} or scan the code, and we'll send you a free preview: your own QR design with your
 business's name, ready to print. No cost, no obligation.</p>
 <div class="contact"><div><b>{signer}</b></div>{"".join(contact)}</div></div>
 <div class="qr"><svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">{qr_path(reply_link, 0, 0, 100)}</svg><small>{qr_label}</small></div></div>
@@ -635,7 +690,8 @@ def brand_files(brand: str, out_dir: Path, accent: str = "") -> list[Path]:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--details", default=str(HERE / "pitch.json"))
-    ap.add_argument("--out", default=str(HERE / "pitch.pdf"))
+    ap.add_argument("--market", default="", help="a version from \"markets\" in the details, e.g. in (India)")
+    ap.add_argument("--out", default="", help="the PDF (default marketing/pitch.pdf, or pitch-<market>.pdf)")
     ap.add_argument("--html", default="", help="also write the HTML here")
     ap.add_argument("--png", action="store_true", help="also save page images next to the PDF")
     ap.add_argument("--brand-files", action="store_true", help="also the logo as pictures, in marketing/brand/")
@@ -643,6 +699,11 @@ def main(argv=None) -> int:
         ap.add_argument(f"--{k}", default=None)
     a = ap.parse_args(argv)
     d = json.loads(Path(a.details).read_text(encoding="utf-8"))
+    if a.market:
+        if a.market not in d.get("markets", {}):
+            raise SystemExit(f"no market {a.market!r} in {a.details} (\"markets\": {', '.join(d.get('markets', {}))})")
+        d.update(d["markets"][a.market])
+    a.out = a.out or str(HERE / (f"pitch-{a.market}.pdf" if a.market else "pitch.pdf"))
     for k in ("brand", "name", "email", "phone", "website"):
         if getattr(a, k) is not None:
             d[k] = getattr(a, k)

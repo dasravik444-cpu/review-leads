@@ -1,0 +1,14 @@
+# Delhi - one city of the India campaign (config/in/fleet.toml). Shared settings: _base.toml.
+# Made by scripts/make_in_cities.py - edit the list there and run it again.
+include = ["../shared/categories.toml", "_base.toml"]
+
+[campaign]
+id = "in-delhi"
+timezone = "Asia/Kolkata"
+lead_id_prefix = "DEL"
+
+[area]
+name = "Delhi"
+aliases = ["New Delhi", "Connaught Place", "Hauz Khas", "Greater Kailash", "Vasant Kunj", "Saket"]
+center = [28.6139, 77.209]
+radius_km = 13

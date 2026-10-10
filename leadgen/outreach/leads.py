@@ -32,9 +32,10 @@ STATUS_DONE = "Emailed - no reply"
 STATUS_OPTED_IN = "Opted in"            # typed by the owner: the business asked to be contacted (e.g. after a letter)
 STATUS_LETTER_QUEUED = "Letter queued"
 STATUS_LETTER_SENT = "Letter sent"
+STATUS_WHATSAPP = "WhatsApp sent"      # messaged on WhatsApp: not e-mailed as well (one channel at a time)
 SYSTEM_STATUSES = {"", "new", STATUS_EMAILED.lower(), STATUS_REPLIED.lower(), STATUS_INTERESTED.lower(),
                    STATUS_OPTED_OUT.lower(), STATUS_BOUNCED.lower(), STATUS_DONE.lower(), STATUS_OPTED_IN.lower(),
-                   STATUS_LETTER_QUEUED.lower(), STATUS_LETTER_SENT.lower()} | \
+                   STATUS_LETTER_QUEUED.lower(), STATUS_LETTER_SENT.lower(), STATUS_WHATSAPP.lower()} | \
                   {STATUS_FOLLOWUP.format(n=n).lower() for n in range(1, 6)}
 
 

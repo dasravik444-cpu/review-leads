@@ -1,0 +1,14 @@
+# Kochi - one city of the India campaign (config/in/fleet.toml). Shared settings: _base.toml.
+# Made by scripts/make_in_cities.py - edit the list there and run it again.
+include = ["../shared/categories.toml", "_base.toml"]
+
+[campaign]
+id = "in-kochi"
+timezone = "Asia/Kolkata"
+lead_id_prefix = "COK"
+
+[area]
+name = "Kochi"
+aliases = ["Cochin", "Ernakulam", "Panampilly Nagar", "Kakkanad"]
+center = [9.9312, 76.2673]
+radius_km = 12

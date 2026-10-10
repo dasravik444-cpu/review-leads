@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The robot's switch in Termux (the command  robot , made by android/setup.sh):
-#   robot on              start it: from now on it finds leads every day and sends the e-mails in US office hours
+#   robot on              start it: from now on it finds leads every day and sends the e-mails in office hours
 #   robot off             stop it (the job it is on finishes its step and saves first; stays off until  robot on )
 #   robot status          what it does and did, and the leads found so far
 #   robot log [LINES]     the end of today's log

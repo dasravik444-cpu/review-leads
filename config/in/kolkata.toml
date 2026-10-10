@@ -1,0 +1,14 @@
+# Kolkata - one city of the India campaign (config/in/fleet.toml). Shared settings: _base.toml.
+# Made by scripts/make_in_cities.py - edit the list there and run it again.
+include = ["../shared/categories.toml", "_base.toml"]
+
+[campaign]
+id = "in-kolkata"
+timezone = "Asia/Kolkata"
+lead_id_prefix = "KOL"
+
+[area]
+name = "Kolkata"
+aliases = ["Calcutta", "Salt Lake", "New Town", "Park Street", "Ballygunge", "Alipore"]
+center = [22.5726, 88.3639]
+radius_km = 15

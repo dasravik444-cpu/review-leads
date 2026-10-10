@@ -1,0 +1,14 @@
+# India outreach: ONE sender (your Gmail, your WhatsApp Business) for all Indian cities. It reads the "India Leads"
+# tab that the India cities fill, and writes the "India ..." outreach tabs.
+# The lead-search settings below are only there because every campaign file needs them.
+include = ["../shared/categories.toml", "_base.toml"]
+
+[campaign]
+id = "in-outreach"
+timezone = "Asia/Kolkata"         # e-mails go out 10:30-18:30 India time, Monday to Saturday
+lead_id_prefix = "IN"
+
+[area]
+name = "India"
+center = [22.5726, 88.3639]
+radius_km = 50

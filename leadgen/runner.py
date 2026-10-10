@@ -38,9 +38,9 @@ from .providers.overture import SOURCE_URL as OVERTURE_URL
 from .providers.overture import OvertureStore
 from .providers.fsq import FoursquareAPI
 from .providers.places_api import PlacesAPI
-from .quality import is_aggregator, is_chain, is_link_hub, is_qualified, match_category, name_score
+from .quality import has_name_word, is_aggregator, is_chain, is_link_hub, is_qualified, match_category, name_score
 from .report import contact_coverage, lead_row, markdown_summary, masked_samples, plan_rows, sheet_condition
-from .util import get_logger, jdump, jload, local_date, norm_text
+from .util import get_logger, jdump, jload, local_date
 
 log = get_logger("runner")
 
@@ -613,7 +613,7 @@ class Runner:
                 excluded = f"closed ({pl.status_text or 'per listing'})"
             elif chain:
                 excluded = f"chain ({chain})"
-            elif any(norm_text(w) and norm_text(w) in norm_text(pl.name) for w in filters["exclude_name_words"]):
+            elif has_name_word(pl.name, filters["exclude_name_words"]):
                 excluded = "excluded name word"
             elif category is None:
                 if filters["allow_unmatched_categories"]:

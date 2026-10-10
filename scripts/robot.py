@@ -1,18 +1,26 @@
-"""The review robot: finds leads every day and sends the e-mails in US office hours by itself (docs/LOCAL.md).
+"""The review robot: finds leads every day and sends the e-mails in office hours by itself (docs/LOCAL.md).
 
     python scripts/robot.py serve          the timetable, for good (on the tablet:  robot on  starts it)
     python scripts/robot.py status         what it does and did, and the leads found so far
     python scripts/robot.py run JOB        one job now: leads, hunt, emails, update or backup
     python scripts/robot.py log [LINES]    the end of today's log
 
-Timetable. Lead jobs in India time; e-mails in US Central time, when US businesses are open:
-    11:00              update   the newest version (kept only when it starts cleanly, else the old one stays)
-    13:00              leads    the next US city: an hour of search, then 30 minutes of e-mail hunt
-    17:30              hunt     an hour of e-mail hunt for businesses of earlier cities that still have no e-mail
-    00:30              backup   the robot's memory into the tablet's Documents folder (the last 7 kept)
-    09:35 ... 15:35    emails   Monday to Friday, every hour, Chicago time (about 8 PM to 2 AM India time)
+Timetable, India time. E-mails go out when the businesses of the market are open (MARKET in settings.txt, India
+unless it says MARKET=us; leadgen/market.py), so the lead jobs move out of their way:
+                       India market                         US market
+    update             09:00                                11:00      the newest version (kept only when it starts
+                                                                       cleanly, else the old one stays)
+    emails             10:35 ... 17:35 Monday to Saturday   09:35 ... 15:35 Chicago time, Monday to Friday
+                                                                       (about 8 PM to 2 AM India time)
+    leads              19:00                                13:00      the next city: an hour of search, then 30
+                                                                       minutes of e-mail hunt
+    hunt               21:30                                17:30      an hour of e-mail hunt for businesses of
+                                                                       earlier cities that still have no e-mail
+    backup             00:30                                00:30      the robot's memory into the tablet's
+                                                                       Documents folder (the last 7 kept)
 One job at a time; a slot missed while the tablet was off runs as soon as the robot is back the same day.
-Settings (settings.txt, all optional): ROBOT_CITIES_PER_DAY (1), ROBOT_LEADS, ROBOT_EMAILS, ROBOT_AUTO_UPDATE (yes/no).
+Settings (settings.txt, all optional): MARKET (in), ROBOT_CITIES_PER_DAY (1), ROBOT_LEADS, ROBOT_EMAILS,
+ROBOT_AUTO_UPDATE (yes/no).
 Plant Parlour has its own robot with its own times; nothing here touches it.
 """
 from __future__ import annotations
@@ -28,6 +36,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import tomllib
 import zipfile
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -36,12 +45,13 @@ from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+from leadgen import market as markets  # noqa: E402 - India or the US (settings.txt MARKET)
+
 DATA = ROOT / "data"
 LOGS = DATA / "logs"
 STATUS = DATA / "robot-status.json"
 STOP = DATA / "robot.stop"                 # written by  robot off : finish the current job's step, then stop
 INDIA = ZoneInfo("Asia/Kolkata")
-CHICAGO = ZoneInfo("America/Chicago")
 UPDATED = 10                               # serve's exit code after an update: start the new version at once
 ALREADY_RUNNING = 75
 BUSY = 3                                   # local_run's exit code when another job holds the lock
@@ -60,15 +70,33 @@ class Job:
     switch: str = ""                                 # a settings key; "no" there switches the job off
 
 
-JOBS = {j.name: j for j in [
-    Job("update", "Update", ("11:00",), INDIA, timeout_min=20, switch="ROBOT_AUTO_UPDATE"),
-    Job("emails", "E-mails", tuple(f"{h:02d}:35" for h in range(9, 16)), CHICAGO, weekdays=(0, 1, 2, 3, 4),
-        timeout_min=55, switch="ROBOT_EMAILS"),
-    Job("leads", "Lead search", ("13:00",), INDIA, timeout_min=0, switch="ROBOT_LEADS"),   # timeout: per city
-    Job("hunt", "E-mail hunt", ("17:30",), INDIA, timeout_min=80, switch="ROBOT_LEADS"),
-    Job("backup", "Backup", ("00:30",), INDIA, timeout_min=20),
-]}
+# The lead jobs' times (India time), out of the way of the market's e-mail hours.
+LEAD_TIMES = {"in": {"update": "09:00", "leads": "19:00", "hunt": "21:30", "backup": "00:30"},
+              "us": {"update": "11:00", "leads": "13:00", "hunt": "17:30", "backup": "00:30"}}
+
+
+def make_jobs(m: markets.Market) -> dict[str, Job]:
+    t = LEAD_TIMES[m.code]
+    return {j.name: j for j in [
+        Job("update", "Update", (t["update"],), INDIA, timeout_min=20, switch="ROBOT_AUTO_UPDATE"),
+        Job("emails", "E-mails", m.email_slots, m.tz, weekdays=m.days, timeout_min=55, switch="ROBOT_EMAILS"),
+        Job("leads", "Lead search", (t["leads"],), INDIA, timeout_min=0, switch="ROBOT_LEADS"),   # timeout: per city
+        Job("hunt", "E-mail hunt", (t["hunt"],), INDIA, timeout_min=80, switch="ROBOT_LEADS"),
+        Job("backup", "Backup", (t["backup"],), INDIA, timeout_min=20),
+    ]}
+
+
+JOBS_BY_MARKET = {code: make_jobs(m) for code, m in markets.MARKETS.items()}
 PRIORITY = ["update", "emails", "leads", "hunt", "backup"]   # when several are due: an update first, e-mails on time
+
+
+def market(settings: dict) -> markets.Market:
+    return markets.current(settings)
+
+
+def jobs(settings: dict) -> dict[str, Job]:
+    """The timetable of the market in the settings."""
+    return JOBS_BY_MARKET[market(settings).code]
 
 
 def slots(job: Job, day: date) -> list[datetime]:
@@ -105,10 +133,10 @@ def switched_on(job: Job, settings: dict) -> bool:
 
 
 def pick_due(now: float, status: dict, settings: dict) -> Job | None:
-    jobs = status.get("jobs", {})
+    records, timetable = status.get("jobs", {}), jobs(settings)
     for name in PRIORITY:
-        job = JOBS[name]
-        st = jobs.get(name) or {}
+        job = timetable[name]
+        st = records.get(name) or {}
         if not switched_on(job, settings) or st.get("retry_at", 0) > now:
             continue
         if due_slot(job, now, st.get("last_started")):
@@ -374,8 +402,17 @@ def serve() -> int:
 
 
 # ------------------------------------------------------------------ status
-def lead_counts() -> list[tuple[str, int, int, int, int]]:
-    """Per city: businesses (leads), with e-mail, with phone, with WhatsApp - from the robot's memory files."""
+def market_cities(m: markets.Market) -> list[str]:
+    try:
+        return list(tomllib.loads((ROOT / "config" / m.code / "fleet.toml").read_text(encoding="utf-8"))["cities"])
+    except (OSError, ValueError, KeyError):
+        return []
+
+
+def lead_counts(m: markets.Market | None = None) -> list[tuple[str, int, int, int, int]]:
+    """Per city of the market: businesses (leads), with e-mail, with phone, with WhatsApp - from the robot's memory
+    files."""
+    cities = market_cities(m) if m else None
     sql = ("SELECT COUNT(*), "
            "SUM(EXISTS(SELECT 1 FROM contacts c WHERE c.place_key=p.key AND c.kind='email' AND c.confidence!='low')), "
            "SUM(EXISTS(SELECT 1 FROM contacts c WHERE c.place_key=p.key AND c.kind='phone' AND c.confidence!='low')), "
@@ -383,7 +420,7 @@ def lead_counts() -> list[tuple[str, int, int, int, int]]:
            "FROM places p WHERE p.qualified=1 AND p.excluded IS NULL AND p.merged_into IS NULL")
     out = []
     for db in sorted(DATA.glob("*.sqlite")):
-        if db.stem == "outreach":
+        if db.stem.startswith("outreach") or db.stem == "check" or (cities is not None and db.stem not in cities):
             continue
         try:
             con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
@@ -396,13 +433,14 @@ def lead_counts() -> list[tuple[str, int, int, int, int]]:
     return out
 
 
-def email_counts(now: float) -> dict:
-    db = DATA / "outreach.sqlite"
+def email_counts(now: float, m: markets.Market | None = None) -> dict:
+    m = m or markets.MARKETS["us"]
+    db = DATA / m.outreach_db
     if not db.exists():
         return {}
     try:
         con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
-        today = datetime.fromtimestamp(now, CHICAGO).date().isoformat()
+        today = datetime.fromtimestamp(now, m.tz).date().isoformat()
         one = lambda sql, *a: con.execute(sql, a).fetchone()[0] or 0  # noqa: E731
         out = {"today": one("SELECT COUNT(*) FROM sends WHERE day=? AND status='sent'", today),
                "all": one("SELECT COUNT(*) FROM sends WHERE status='sent'"),
@@ -416,12 +454,14 @@ def email_counts(now: float) -> dict:
         return {}
 
 
-def email_settings() -> dict:
-    """The e-mail part of the outreach config (config/us/_base.toml [outreach.email]); {} if it cannot be read."""
+def email_settings(m: markets.Market | None = None) -> dict:
+    """The e-mail part of the market's outreach config (config/<market>/_base.toml [outreach.email]); {} if it cannot
+    be read."""
     try:
         from leadgen.config import load_config
 
-        return load_config(str(ROOT / "config" / "us" / "outreach.toml"))["outreach"]["email"]
+        m = m or market(read_settings())
+        return load_config(str(ROOT / "config" / m.code / "outreach.toml"))["outreach"]["email"]
     except Exception:  # noqa: BLE001 - only for the status
         return {}
 
@@ -489,26 +529,28 @@ def pct(part: int, whole: int) -> str:
 def status_text(now: float | None = None) -> str:
     now = now or time.time()
     st, settings = load_status(), read_settings()
+    m, timetable = market(settings), jobs(settings)
     sch = st.get("scheduler") or {}
     alive = sch.get("heartbeat", 0) > now - 180
+    local = "" if m.tz.key == INDIA.key else f" = {datetime.fromtimestamp(now, m.tz):%a %H:%M} in {m.place}"
     lines = [f"Robot: {'RUNNING' if alive else 'NOT RUNNING'}"
              + (f" since {fmt(sch.get('started'))} (version {sch.get('version', '?')})" if alive else ""),
-             f"Now {datetime.fromtimestamp(now, INDIA):%a %H:%M} in India = "
-             f"{datetime.fromtimestamp(now, CHICAGO):%a %H:%M} in Chicago"]
+             f"Market: {m.name} (MARKET in settings.txt)",
+             f"Now {datetime.fromtimestamp(now, INDIA):%a %H:%M} in India{local}"]
     running = st.get("running") if alive else None
     if running:
-        lines.append(f"Working on: {JOBS[running['job']].title} (since {fmt(running['since'])})")
+        lines.append(f"Working on: {timetable[running['job']].title} (since {fmt(running['since'])})")
     lines += ["", f"{'Job':<13}{'Last run (India time)':<24}{'Result':<44}Next run (India time)"]
     queued = 0                         # jobs whose time today has passed (e.g. the robot was off): one after the other
     problems = []
-    e_cfg = email_settings()
+    e_cfg = email_settings(m)
     paused = e_cfg.get("enabled") is False           # sending paused in the config: the job only reads replies
     for name in PRIORITY:
-        job, rec = JOBS[name], (st.get("jobs") or {}).get(name) or {}
+        job, rec = timetable[name], (st.get("jobs") or {}).get(name) or {}
         nxt = next_slot(job, now)
         nxt_text = "switched off in settings.txt" if not switched_on(job, settings) else fmt(nxt.timestamp()) if nxt else "-"
-        if nxt and job.tz is CHICAGO and switched_on(job, settings):
-            nxt_text += f" ({nxt:%H:%M} Chicago)"
+        if nxt and job.tz.key != INDIA.key and switched_on(job, settings):
+            nxt_text += f" ({nxt:%H:%M} {m.place})"
         if alive and switched_on(job, settings) and due_slot(job, now, rec.get("last_started")):
             if running and running["job"] == name:
                 nxt_text = "now (working on it)"
@@ -527,9 +569,9 @@ def status_text(now: float | None = None) -> str:
                 problems.append(f"  {job.title} ({fmt(rec.get('last_started'))}): {why}")
     if problems:
         lines += ["", "Why it failed (robot log shows more):"] + problems
-    counts = lead_counts()
+    counts = lead_counts(m)
     if counts:
-        lines += ["", "Leads found on this tablet (businesses, and how many have each contact):",
+        lines += ["", f"Leads found on this tablet in {m.name} (businesses, and how many have each contact):",
                   f"{'City':<16}{'Businesses':>11}{'E-mail':>13}{'Phone':>13}{'WhatsApp':>10}"]
         tot = [0, 0, 0, 0]
         for city, n, e, p, w in counts:
@@ -537,8 +579,8 @@ def status_text(now: float | None = None) -> str:
             tot = [a + b for a, b in zip(tot, (n, e, p, w))]
         if len(counts) > 1:
             lines.append(f"{'All cities':<16}{tot[0]:>11,}{pct(tot[1], tot[0]):>13}{pct(tot[2], tot[0]):>13}{tot[3]:>10,}")
-    em = email_counts(now)
-    head = "E-mails (sending PAUSED in config/us/_base.toml)" if paused else "E-mails"
+    em = email_counts(now, m)
+    head = f"E-mails (sending PAUSED in config/{m.code}/_base.toml)" if paused else "E-mails"
     if em:
         cap = daily_limit(em["days"], e_cfg)
         r = em["replies"]
@@ -556,7 +598,7 @@ def main(argv=None) -> int:
     sub.add_parser("serve", help="the timetable, for good")
     sub.add_parser("status", help="what it does and did, the leads so far")
     r = sub.add_parser("run", help="one job now")
-    r.add_argument("job", choices=sorted(JOBS))
+    r.add_argument("job", choices=sorted(PRIORITY))
     lg = sub.add_parser("log", help="the end of today's log")
     lg.add_argument("lines", nargs="?", type=int, default=60)
     a = ap.parse_args(argv)
@@ -570,7 +612,8 @@ def main(argv=None) -> int:
         text = path.read_text(encoding="utf-8").splitlines() if path.exists() else ["(nothing logged today yet)"]
         print("\n".join(text[-a.lines:]))
         return 0
-    run_job(JOBS[a.job], read_settings())
+    settings = read_settings()
+    run_job(jobs(settings)[a.job], settings)
     return 0
 
 

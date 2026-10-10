@@ -20,9 +20,9 @@ ROOT = Path(__file__).resolve().parent.parent
 TAB = "WhatsApp Queue"
 
 
-def queue_sheet(rows):
+def queue_sheet(rows, tab=TAB):
     sess = FakeSheetsSession()
-    sess.tabs[TAB] = {"id": 7, "rows": [list(TABS["whatsapp"])] + [list(r) for r in rows]}
+    sess.tabs[tab] = {"id": 7, "rows": [list(TABS["whatsapp"])] + [list(r) for r in rows]}
     return sess, SheetsClient("sheet", session=sess)
 
 
@@ -32,9 +32,9 @@ def qrow(lead_id, business, number, result="", key="", why="Publishes this numbe
             result, key or f"k-{lead_id}"]
 
 
-def results(sess):
+def results(sess, tab=TAB):
     col = TABS["whatsapp"].index("Result")
-    return [r[col] if len(r) > col else "" for r in sess.tabs[TAB]["rows"][1:]]
+    return [r[col] if len(r) > col else "" for r in sess.tabs[tab]["rows"][1:]]
 
 
 def test_the_queue_gives_the_messages_still_to_send_and_saves_each_result():
@@ -67,10 +67,12 @@ def local_run():
     return mod
 
 
-def test_the_command_prints_the_next_message_as_one_line_and_waits_for_us_office_hours(monkeypatch, capsys):
-    sess, client = queue_sheet([qrow("", "Taco\tTown", "+1 512-555-0101")])                # no Lead ID, a tab in a name
+@pytest.mark.parametrize("market,tab", [("us", "WhatsApp Queue"), ("in", "India WhatsApp Queue")])
+def test_the_command_prints_the_next_message_as_one_line_and_waits_for_office_hours(market, tab, monkeypatch, capsys):
+    sess, client = queue_sheet([qrow("", "Taco\tTown", "+1 512-555-0101")], tab)          # no Lead ID, a tab in a name
     import leadgen.sheets
 
+    monkeypatch.setenv("MARKET", market)                     # each market has its own queue tab
     monkeypatch.setattr(leadgen.sheets, "SheetsClient", lambda *a, **k: client)
     monkeypatch.setenv("RQ_SHEET_ID", "sheet")
     lr = local_run()
@@ -85,13 +87,15 @@ def test_the_command_prints_the_next_message_as_one_line_and_waits_for_us_office
     assert run("next") == 0
     fields = capsys.readouterr().out.rstrip("\n").split("\t")
     assert fields == ["2", "k-", "+1 512-555-0101", "-", "Taco Town", "https://wa.me/15125550101?text=Hi"]
-    monkeypatch.setattr(lr, "us_working_hours", lambda: (False, "Monday 02:00 in Chicago"))
-    assert run("list") == 4 and "outside US office hours" in capsys.readouterr().out
+    monkeypatch.setattr(lr, "working_hours", lambda: (False, "Monday 02:00"))
+    out = (run("list"), capsys.readouterr().out)
+    hours = "10 AM - 6:30 PM, Monday to Saturday" if market == "in" else "about 8 PM - 2 AM India time"
+    assert out[0] == 4 and "outside office hours in" in out[1] and hours in out[1]
     assert run("list", "--now") == 0
-    monkeypatch.setattr(lr, "us_working_hours", lambda: (True, "Monday 11:00 in Chicago"))
+    monkeypatch.setattr(lr, "working_hours", lambda: (True, "Monday 11:00"))
     assert run("list") == 0 and "1 message to send" in capsys.readouterr().out
-    assert run("mark", "2", "k-", "+1 512-555-0101", "Sent") == 0 and results(sess) == ["Sent"]
-    assert run("mark", "2", "k-", "+1 512-555-0101", "Interested") == 0 and results(sess) == ["Interested"]  # a later answer
+    assert run("mark", "2", "k-", "+1 512-555-0101", "Sent") == 0 and results(sess, tab) == ["Sent"]
+    assert run("mark", "2", "k-", "+1 512-555-0101", "Interested") == 0 and results(sess, tab) == ["Interested"]
 
 
 TABLET_STUBS = {
@@ -129,7 +133,7 @@ def test_the_tablet_opens_each_chat_in_whatsapp_business_and_saves_what_you_answ
     assert "mark 3 k-1 +1 512-555-0101 Sent" in log and "mark 4 k-2 +1 512-555-0102 Not on WhatsApp" in log
     (tmp_path / "n").unlink()
     (tmp_path / "log").unlink()
-    out = run("", LIST_CODE="4")                               # outside US office hours: nothing is opened
+    out = run("", LIST_CODE="4")                               # outside office hours: nothing is opened
     assert out.returncode == 0 and not (tmp_path / "log").exists()
     out = run("q\n")                                           # stop after looking at the first one
     assert "Stopped" in out.stdout and "mark" not in (tmp_path / "log").read_text()

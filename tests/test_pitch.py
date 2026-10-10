@@ -42,5 +42,21 @@ def test_the_owners_copy_carries_a_whatsapp_code_and_the_public_one_an_e_mail_co
     d = json.loads((ROOT / "marketing" / "pitch.json").read_text(encoding="utf-8"))
     page = lambda details: p.build_html(details).split("</style>", 1)[1]   # noqa: E731 - the page, not the font data
     assert "Scan to e-mail us" in page(d) and "+91" not in page(d)
-    mine = page({**d, "phone": "+91 62908 43509"})
-    assert "Scan to chat on WhatsApp" in mine and "+91 62908 43509" in mine
+    mine = page({**d, "phone": "+91 90000 00000"})
+    assert "Scan to chat on WhatsApp" in mine and "+91 90000 00000" in mine
+
+
+def test_the_india_version_has_rupee_prices_and_the_monthly_review_report():
+    p = pitch()
+    d = json.loads((ROOT / "marketing" / "pitch.json").read_text(encoding="utf-8"))
+    html = p.build_html({**d, **d["markets"]["in"]})
+    page = html.split("</style>", 1)[1].replace("&#x27;", "'")
+    assert "₹3,000" in page and "₹8,000" in page and "$100" not in page and "$200" not in page
+    assert "We track your Google reviews, every month" in page
+    for item in ("How many new reviews", "Your star rating", "What it brings you", "add us as a manager"):
+        assert item in page, item
+    assert "Reply “yes” to our message" in page
+    assert "unicode-range: U+20B9" in html                       # the rupee sign comes from Inter too, embedded
+    us = p.build_html(d).split("</style>", 1)[1]
+    assert "We track your Google reviews, every month" not in us and "Reply “yes” to our e-mail" in us
+    assert (ROOT / "marketing" / "pitch-in.pdf").is_file()       # the one e-mails attach until you import your copy

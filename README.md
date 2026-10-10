@@ -1,11 +1,15 @@
 # Review QR automation
 
-Google review stands for restaurants, cafés, salons, gyms and other walk-in businesses, plus the system that finds
-the customers. It starts with the US and other English-speaking markets.
+Google review QR codes for restaurants, cafés, salons, gyms and other walk-in businesses, plus the system that finds
+the customers. It works on India (the default since 10 October 2026: premium cafés, restaurants, bars, bakeries,
+salons and gyms in 16 big cities) or the US (`MARKET=us` in settings.txt).
 
 - **Finds the businesses.**
-  - It works through 30 US cities, a few at a time, on your own computer ([docs/LOCAL.md](docs/LOCAL.md)).
-  - It covers 15 business types: restaurants, cafés, bars, bakeries, salons and barbers, gyms, hotels,
+  - India: 16 cities from Kolkata, Mumbai and Delhi on, each from its centre outwards; only businesses with their
+    own website or Instagram, no budget eateries, no big chains ([config/in/_base.toml](config/in/_base.toml)).
+  - US: 30 cities, a few at a time, on your own computer ([docs/LOCAL.md](docs/LOCAL.md)).
+  - For the US
+ it covers 15 business types: restaurants, cafés, bars, bakeries, salons and barbers, gyms, hotels,
     dentists, garages and car washes, clinics and med spas, pet groomers and vets, tattoo studios, entertainment
     venues, boutiques and florists, and laundromats.
   - It uses open data (Overture Maps) and the businesses' own websites.
@@ -39,13 +43,14 @@ the customers. It starts with the US and other English-speaking markets.
 leadgen/            lead engine + outreach (python -m leadgen ...)
   country.py        country packs: words, domains, postcodes, contact rules
   outreach/         e-mails, WhatsApp queue, replies (letters where e-mail needs consent)
-config/us/          one file per US city, _base.toml (shared), fleet.toml (which cities run), outreach.toml
+config/in/          one file per India city, _base.toml (shared), fleet.toml (which cities run), outreach.toml
+config/us/          the same for the US (MARKET=us in settings.txt; leadgen/market.py)
 config/shared/      the business types (categories.toml)
 config/examples/    single campaigns: UK, Australia, ...
 site/               customer pages: site.json (you), businesses/<id>.json (customers), build.py
-marketing/          the two-page sales PDF for businesses (pitch.json = your details, build_pitch.py)
+marketing/          the two-page sales PDF: pitch.pdf (US, $), pitch-in.pdf (India, ₹; build_pitch.py --market in)
 guests/             WhatsApp review requests to guests who agreed
-scripts/            make_us_cities.py (city files), ci/ (fleet plan, encrypted state, probes)
+scripts/            make_in_cities.py, make_us_cities.py (city files), ci/ (fleet plan, encrypted state, probes)
 .github/workflows/  US fleet, outreach, tests, probes
 ```
 

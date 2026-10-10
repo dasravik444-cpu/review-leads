@@ -79,6 +79,12 @@ it itself. Prices in US dollars, paid by card or PayPal; the same in other Engli
 | **Starter** | Their QR code, linked straight to their Google review page; print-ready QR designs for tables, counter, window and receipts; review tracking: a report of new reviews and rating every month for 12 months | $100 |
 | **Pro** | Starter + review requests to their own customer list by WhatsApp and e-mail (up to 3 reminders), with their Google review link or a short feedback form | $200 |
 
+**India (decided 10 October 2026):** the same two packages for premium cafés, restaurants, bars, bakeries, salons
+and gyms: **Starter ₹3,000, Pro ₹8,000**, one time (PDF: `marketing/pitch-in.pdf`). The India PDF also spells out
+the review tracking: every month for 12 months, how many new Google reviews they got and their total, their star
+rating month by month, and (when they add us as a manager of their Google Business Profile, which they can undo any
+time) the calls, direction requests and website visits Google counts for their profile.
+
 Paid WhatsApp sending (Meta's WhatsApp Business Platform) is passed on at cost if a customer wants it fully
 automatic; Meta's price per message differs by country, about €0.11 in Germany. Review tracking needs the
 business's Google rating and review count once a month: from Google Maps by hand, or from the Google Places API

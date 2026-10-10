@@ -48,7 +48,9 @@ DEFAULTS: dict = {
     # require_any: only leads with one of these contacts go to the sheet, e.g. ["email", "whatsapp"] (empty = every
     # lead). plan_tab / report_tab = "" leave that tab out (several cities sharing one sheet: see config/us/).
     "sheets": {"enabled": True, "spreadsheet_id": "", "leads_tab": "Leads", "plan_tab": "Plan",
-               "report_tab": "Daily Report", "checkpoint_minutes": 20, "require_any": []},
+               "report_tab": "Daily Report", "checkpoint_minutes": 20, "require_any": [],
+               # require_presence: and their own website or an Instagram account (the India premium focus)
+               "require_presence": []},
     "runtime": {"time_budget_minutes": 80, "use_curl_cffi": True, "safety_margin_minutes": 6},
     # open-data: only openly licensed data (Overture Maps, OpenStreetMap) + the businesses' own websites,
     #            crawled openly as a named bot. No scraping of Google Maps, search engines or Instagram.
@@ -336,6 +338,9 @@ def validate(cfg: Config) -> None:
     bad = [k for k in (sh.get("require_any") or []) if k not in ("email", "whatsapp", "phone", "instagram")]
     if bad:
         errors.append(f"sheets.require_any: unknown contact kinds {bad} (use email, whatsapp, phone, instagram)")
+    bad = [k for k in (sh.get("require_presence") or []) if k not in ("website", "instagram")]
+    if bad:
+        errors.append(f"sheets.require_presence: unknown kinds {bad} (use website, instagram)")
     p = cfg["plan"]
     if not (p["days"] == "auto" or (isinstance(p["days"], int) and 1 <= p["days"] <= 365)):
         errors.append("plan.days must be an integer 1..365 or \"auto\"")

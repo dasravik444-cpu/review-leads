@@ -9,7 +9,7 @@ from . import country
 from .db import DB
 from .enrich.phones import display_phone, refine_phone_label
 from .planner import localities_seen
-from .quality import is_aggregator, lead_priority
+from .quality import AGGREGATOR_DOMAINS, LINK_HUB_DOMAINS, is_aggregator, lead_priority
 from .sheets import LEAD_COLUMNS, PLAN_COLUMNS
 from .util import fmt_local, jload, mask_value
 
@@ -126,12 +126,24 @@ SHEET_KINDS = ("email", "whatsapp", "phone", "instagram")
 
 
 def sheet_condition(cfg, col: str = "key") -> str:
-    """SQL condition for leads that belong in the sheet: one of the contacts [sheets] require_any asks for."""
+    """SQL condition for leads that belong in the sheet: one of the contacts [sheets] require_any asks for, and
+    (with [sheets] require_presence) their own website or an Instagram account."""
+    conds = []
     kinds = [k for k in (cfg["sheets"].get("require_any") or []) if k in SHEET_KINDS]
-    if not kinds:
-        return "1=1"
-    return (f"{col} IN (SELECT place_key FROM contacts WHERE kind IN ({','.join(repr(k) for k in kinds)}) "
-            "AND confidence!='low')")
+    if kinds:
+        conds.append(f"{col} IN (SELECT place_key FROM contacts WHERE kind IN ({','.join(repr(k) for k in kinds)}) "
+                     "AND confidence!='low')")
+    presence = []
+    if "website" in (cfg["sheets"].get("require_presence") or []):
+        # a website of its own: not a listing, delivery or social page, nor a link-in-bio page
+        others = " ".join(f"AND lower(website) NOT LIKE '%{d}%'" for d in sorted(AGGREGATOR_DOMAINS | LINK_HUB_DOMAINS)
+                          if "'" not in d)
+        presence.append(f"{col} IN (SELECT key FROM places WHERE website IS NOT NULL AND trim(website)!='' {others})")
+    if "instagram" in (cfg["sheets"].get("require_presence") or []):
+        presence.append(f"{col} IN (SELECT place_key FROM contacts WHERE kind='instagram' AND confidence!='low')")
+    if presence:
+        conds.append("(" + " OR ".join(presence) + ")")
+    return " AND ".join(conds) or "1=1"
 
 
 def export_csv(db: DB, cfg, path: str, without_email: bool = False, sheet_only: bool = False) -> int:

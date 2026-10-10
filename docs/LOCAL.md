@@ -57,17 +57,20 @@ If it says **`[FAIL] Google Sheet access ... HTTP 403`**, the Sheet does not let
 **Share** → paste the address → **Editor** → untick **Notify people** → **Share**, then `check` again. (Still 403?
 Then `RQ_SHEET_ID` is probably another Sheet's: fix it with `settings`.)
 
-**Step 6 – Switch the robot on.** Type `robot on`. From then on it works by itself, every day:
+**Step 6 – Switch the robot on.** Type `robot on`. From then on it works by itself, every day. It works on India
+unless `settings` says `MARKET=us`; each market has its own cities, its own tabs in the Sheet ("India Leads",
+"India Outreach", "India WhatsApp Queue" ...) and its own memory of e-mails, so the two never mix:
 
-| When (India time) | What |
-|---|---|
-| 11:00 | gets the newest version (keeps it only if it starts cleanly) |
-| 13:00 | the next US city: an hour of search, then 30 minutes of e-mail hunt (Austin gave 2,171 businesses) |
-| 17:30 | an hour more of e-mail hunt for businesses of earlier cities that still have no e-mail |
-| 20:05 - 02:05 (from 1 November 21:05 - 03:05), US Monday-Friday | e-mails, every hour at 09:35-15:35 Chicago time: first e-mails with the PDF, follow-ups, replies and bounces |
-| 00:30 | a backup of its memory into the tablet's Documents folder (`review-leads-backup`, last 7 days) |
+| When (India time) | India (the default) | US (`MARKET=us`) |
+|---|---|---|
+| newest version (kept only if it starts cleanly) | 09:00 | 11:00 |
+| e-mails: first e-mails with the PDF, follow-ups, replies and bounces; fills the WhatsApp Queue | every hour 10:35 - 17:35, Monday to Saturday | every hour 09:35 - 15:35 Chicago time, Monday to Friday (20:05 - 02:05 India time; from 1 November 21:05 - 03:05) |
+| the next city: an hour of search, then 30 minutes of e-mail hunt (Austin gave 2,171 businesses) | 19:00 | 13:00 |
+| an hour more of e-mail hunt for businesses of earlier cities that still have no e-mail | 21:30 | 17:30 |
+| a backup of its memory into the tablet's Documents folder (`review-leads-backup`, last 7 days) | 00:30 | 00:30 |
 
-Every business with an e-mail, WhatsApp or phone number goes into the Sheet. E-mails start at 15 a day and rise by
+India: a business goes into the Sheet with an e-mail, WhatsApp or phone number **and** its own website or Instagram
+(the premium focus). US: every business with an e-mail, WhatsApp or phone number. E-mails start at 15 a day and rise by
 5 every 3 sending days to 40 (a new Gmail that sends much more is soon treated as spam). `robot status` shows what it does,
 the last and next run of each job, and per city how many businesses it found and how many have an e-mail and a
 phone; its first line is the switch (`Switch: ON`). `robot log` shows today's log, `robot off` stops it (the job it
@@ -75,20 +78,24 @@ is on saves first, up to 3 minutes, and runs again when the robot is back on), `
 Android closes it (Termux:API app); both apps are already there for Plant Parlour. Keep the tablet charging and on
 Wi-Fi, and Termux on **Battery: Unrestricted** and **Autostart: on** (Settings → Apps → Termux). More than one city a
 day: `ROBOT_CITIES_PER_DAY=2` in `settings`; a job off: `ROBOT_EMAILS=no` (or `ROBOT_LEADS=no`). Sending can also
-be paused in the code (`enabled = false` under `[outreach.email]` in `config/us/_base.toml`, reaching the tablet with
-`update` or the robot's own 11:00 update): the robot then sends nothing, follow-ups included, but still reads replies
+be paused in the code (`enabled = false` under `[outreach.email]` in `config/in/_base.toml`, or `config/us/_base.toml`
+for the US, reaching the tablet with `update` or the robot's own daily update; India's is paused until you approve
+its e-mail): the robot then sends nothing, follow-ups included, but still reads replies
 and bounces, and `robot status` says **sending PAUSED**.
 
 **By hand instead:** `leads` finds businesses (3 cities, about 4½ hours; `leads --count 1` one city), `emails` sends
-this hour's share of the day's e-mails between about **8 PM and 3 AM India time** on US working days. A command typed
+this hour's share of the day's e-mails in office hours (India: **10 AM - 6:30 PM, Monday to Saturday**; US: about
+**8 PM - 3 AM India time** on US working days). A command typed
 while the robot is on a job says so (`Busy: e-mail sending (the robot, since 22:09 India time)`): try again later.
 `import` instead waits for that job to finish and then runs by itself. `whatsapp` goes through today's WhatsApp
 messages, one tap each in WhatsApp Business (docs/WHATSAPP.md: the rules, the setup and the app's automatic replies). `update` gets the newest version of everything;
 after it, `robot off` and `robot on` once start the new version of the switch too.
 
 **Your PDF and lead lists from GitHub: `import`.** Every first e-mail carries the 2-page Aurenflow PDF (named
-`Aurenflow-overview.pdf` in the e-mail). Save your own copy (`Aurenflow-overview.pdf`, the one with your WhatsApp number)
-into the tablet's Download folder, then type `import`: from then on that one is attached. `import` also adds lead lists you downloaded from GitHub (`leads-<city>.zip`) to the Sheet:
+`Aurenflow-overview.pdf` in the e-mail): India gets the rupee version (`marketing/pitch-in.pdf`), the US the dollar
+one. Save your own copy, the one with your WhatsApp number (`Aurenflow-India-overview.pdf` for India,
+`Aurenflow-overview.pdf` for the US), into the tablet's Download folder, then type `import`: from then on that one
+is attached. `import` also adds lead lists you downloaded from GitHub (`leads-<city>.zip`) to the Sheet:
 today's rules are applied again (big chains and addresses that are not the business's are left out), businesses
 already in the Sheet stay exactly as they are, and none gets a Lead ID another business already has. A GitHub list
 is downloaded while signed in to GitHub, from the run's page → **Artifacts** (it stays there 7 days after the run).
@@ -112,7 +119,7 @@ not deliver it.
 This robot never changes Termux's shared parts once they work (proot-distro, the package lists), never releases the
 keep-awake lock Plant Parlour holds, and keeps its memory use for the map data under 2 GB. Its robot uses its own
 start-up file (`~/.termux/boot/review-leads`), folder (`~/.review-leads`) and 15-minute check (job 7711; Plant
-Parlour's is 4711), and its lead search starts at 13:00, after Plant Parlour's 06:00 lead run.
+Parlour's is 4711), and its lead search starts at 19:00 (India) or 13:00 (US), after Plant Parlour's 06:00 lead run.
 
 ## One-time setup (Windows, about 20 minutes)
 

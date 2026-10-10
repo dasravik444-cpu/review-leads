@@ -1,4 +1,5 @@
-"""Running on your own computer: keys from .env, which cities come next, US working hours for the e-mails."""
+"""Running on your own computer: keys from .env, which cities come next, office hours for the e-mails - in the US
+(most tests here) and in India (the default market)."""
 from __future__ import annotations
 
 import importlib.util
@@ -10,7 +11,14 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import pytest
+
 ROOT = Path(__file__).resolve().parent.parent
+
+
+@pytest.fixture(autouse=True)
+def us_market(monkeypatch):
+    monkeypatch.setenv("MARKET", "us")       # these tests were written for the US; the India ones set MARKET=in
 
 
 def local_run():
@@ -61,11 +69,61 @@ def test_cities_never_searched_come_first_then_the_oldest(tmp_path, monkeypatch)
 def test_emails_only_in_us_working_hours():
     lr = local_run()
     chi = ZoneInfo("America/Chicago")
-    assert lr.us_working_hours(datetime(2026, 10, 12, 10, 0, tzinfo=chi))[0]                  # Monday morning
-    assert not lr.us_working_hours(datetime(2026, 10, 12, 7, 0, tzinfo=chi))[0]               # too early
-    assert not lr.us_working_hours(datetime(2026, 10, 10, 11, 0, tzinfo=chi))[0]              # Saturday
+    assert lr.working_hours(datetime(2026, 10, 12, 10, 0, tzinfo=chi))[0]                     # Monday morning
+    assert not lr.working_hours(datetime(2026, 10, 12, 7, 0, tzinfo=chi))[0]                  # too early
+    assert not lr.working_hours(datetime(2026, 10, 10, 11, 0, tzinfo=chi))[0]                 # Saturday
     ist = ZoneInfo("Asia/Kolkata")
-    assert lr.us_working_hours(datetime(2026, 10, 12, 21, 0, tzinfo=ist))[0]                  # 9 PM in India
+    assert lr.working_hours(datetime(2026, 10, 12, 21, 0, tzinfo=ist))[0]                     # 9 PM in India
+
+
+def test_india_market_office_hours_cities_and_files(monkeypatch, tmp_path):
+    monkeypatch.setenv("MARKET", "in")
+    lr = local_run()
+    ist = ZoneInfo("Asia/Kolkata")
+    assert lr.working_hours(datetime(2026, 10, 12, 11, 0, tzinfo=ist)) == (True, "Monday 11:00 in India")
+    assert lr.working_hours(datetime(2026, 10, 10, 17, 0, tzinfo=ist))[0]                     # Saturday too
+    assert not lr.working_hours(datetime(2026, 10, 11, 11, 0, tzinfo=ist))[0]                 # not on Sunday
+    assert not lr.working_hours(datetime(2026, 10, 12, 21, 0, tzinfo=ist))[0]                 # nor at night
+    assert lr.fleet()[0] == "kolkata" and lr.conf("kolkata") == "config/in/kolkata.toml"
+    assert all((ROOT / lr.conf(c)).is_file() for c in lr.fleet())
+    monkeypatch.setattr(lr, "DATA", tmp_path)
+    assert lr.attachment().name == "pitch-in.pdf"                    # the India PDF, not the US one
+    calls = []
+    monkeypatch.setattr(lr, "leadgen", lambda *a: calls.append(a) or 0)
+    monkeypatch.setattr(lr, "working_hours", lambda: (True, "Monday 11:00 in India"))
+    args = {"dry_run": True, "now": False, "check": False, "max": None, "no_pdf": False, "copy_to": ""}
+    lr.cmd_emails(type("A", (), args)())
+    (cmd,) = calls
+    assert cmd[cmd.index("--config") + 1] == "config/in/outreach.toml"
+    assert cmd[cmd.index("--db") + 1] == str(tmp_path / "outreach-in.sqlite")        # its own memory of e-mails
+    assert cmd[cmd.index("--attach") + 1].endswith("pitch-in.pdf")
+
+
+def test_india_import_takes_the_india_pdf_only(tmp_path, monkeypatch):
+    monkeypatch.setenv("MARKET", "in")
+    lr = local_run()
+    monkeypatch.setattr(lr, "DATA", tmp_path / "data")
+    (tmp_path / "data").mkdir()
+    downloads = tmp_path / "Download"
+    downloads.mkdir()
+    (downloads / "Aurenflow-India-overview.pdf").write_bytes(b"%PDF India")
+    (downloads / "Aurenflow-overview.pdf").write_bytes(b"%PDF US")           # newer, but the US one
+    os.utime(downloads / "Aurenflow-India-overview.pdf", (1, 1))
+    a = type("A", (), {"folder": [str(downloads)], "dry_run": False})()
+    assert lr.cmd_import(a) == 0                                             # a PDF and no lead list: fine
+    assert (tmp_path / "data" / "attachment-in.pdf").read_bytes() == b"%PDF India"
+    assert not (tmp_path / "data" / "attachment.pdf").exists()
+
+
+def test_the_postal_address_is_needed_for_us_emails_only(tmp_path, monkeypatch):
+    lr = local_run()
+    for k in lr.KEYS:
+        monkeypatch.setenv(k, "x")
+    monkeypatch.delenv("OUTREACH_POSTAL_ADDRESS")
+    monkeypatch.setattr(lr, "find_key_file", lambda: "key.json")
+    assert lr.load_env(tmp_path / "none.txt") == ["OUTREACH_POSTAL_ADDRESS"]
+    monkeypatch.setenv("MARKET", "in")
+    assert lr.load_env(tmp_path / "none.txt") == []
 
 
 def test_unknown_city_stops_before_any_work(capsys):
@@ -155,8 +213,6 @@ def test_import_waits_for_the_robots_job_and_takes_the_pdf_at_once(tmp_path, mon
 
 
 def test_one_job_at_a_time_and_emails_paced_by_default(tmp_path, monkeypatch):
-    import pytest
-
     lr = local_run()
     monkeypatch.setattr(lr, "DATA", tmp_path)
     monkeypatch.setenv("ROBOT_JOB", "1")
@@ -170,7 +226,7 @@ def test_one_job_at_a_time_and_emails_paced_by_default(tmp_path, monkeypatch):
         assert "e-mail sending (typed by hand, since" in (tmp_path / "robot.lock").read_text()
     calls = []
     monkeypatch.setattr(lr, "leadgen", lambda *a: calls.append(a) or 0)
-    monkeypatch.setattr(lr, "us_working_hours", lambda: (True, "Monday 10:00 in Chicago"))
+    monkeypatch.setattr(lr, "working_hours", lambda: (True, "Monday 10:00 in Chicago"))
     args = {"dry_run": False, "now": False, "check": False, "max": None, "no_pdf": False, "copy_to": ""}
     run = lambda **k: lr.cmd_emails(type("A", (), {**args, **k})())  # noqa: E731
     run()
@@ -205,7 +261,7 @@ def test_hunt_starts_with_the_city_that_has_most_businesses_to_look_at(tmp_path,
 def test_a_test_email_lists_what_was_sent_and_claims_no_more_than_gmail_said(tmp_path, monkeypatch, capsys):
     lr = local_run()
     monkeypatch.setattr(lr, "DATA", tmp_path)
-    monkeypatch.setattr(lr, "us_working_hours", lambda: (True, "Friday 11:38 in Chicago"))
+    monkeypatch.setattr(lr, "working_hours", lambda: (True, "Friday 11:38 in Chicago"))
 
     def fake_leadgen(*args, result="sent"):
         with open(os.environ["OUTREACH_SENT_CSV"], "w", encoding="utf-8") as fh:

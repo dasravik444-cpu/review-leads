@@ -1,0 +1,14 @@
+# Noida - one city of the India campaign (config/in/fleet.toml). Shared settings: _base.toml.
+# Made by scripts/make_in_cities.py - edit the list there and run it again.
+include = ["../shared/categories.toml", "_base.toml"]
+
+[campaign]
+id = "in-noida"
+timezone = "Asia/Kolkata"
+lead_id_prefix = "NOI"
+
+[area]
+name = "Noida"
+aliases = ["Gautam Buddh Nagar"]
+center = [28.5355, 77.391]
+radius_km = 6.5

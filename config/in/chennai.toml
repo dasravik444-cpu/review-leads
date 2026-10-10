@@ -1,0 +1,14 @@
+# Chennai - one city of the India campaign (config/in/fleet.toml). Shared settings: _base.toml.
+# Made by scripts/make_in_cities.py - edit the list there and run it again.
+include = ["../shared/categories.toml", "_base.toml"]
+
+[campaign]
+id = "in-chennai"
+timezone = "Asia/Kolkata"
+lead_id_prefix = "MAA"
+
+[area]
+name = "Chennai"
+aliases = ["Madras", "T Nagar", "Nungambakkam", "Adyar", "Anna Nagar", "OMR"]
+center = [13.0827, 80.2707]
+radius_km = 15

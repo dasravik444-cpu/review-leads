@@ -1,0 +1,14 @@
+# Hyderabad - one city of the India campaign (config/in/fleet.toml). Shared settings: _base.toml.
+# Made by scripts/make_in_cities.py - edit the list there and run it again.
+include = ["../shared/categories.toml", "_base.toml"]
+
+[campaign]
+id = "in-hyderabad"
+timezone = "Asia/Kolkata"
+lead_id_prefix = "HYD"
+
+[area]
+name = "Hyderabad"
+aliases = ["Secunderabad", "Banjara Hills", "Jubilee Hills", "HITEC City", "Gachibowli"]
+center = [17.385, 78.4867]
+radius_km = 18

@@ -9,9 +9,13 @@ RQ_SHEET_ID=
 OUTREACH_GMAIL_ADDRESS=das.ravik002@gmail.com
 OUTREACH_GMAIL_APP_PASSWORD=
 
-# 3. Printed under every e-mail (US law asks for a real postal address)
+# 3. Printed under every e-mail: your WhatsApp Business number with the country code (+91...). The postal address
+#    is needed only for US e-mails (US law asks for one); leave it empty for India.
 OUTREACH_SENDER_PHONE=
 OUTREACH_POSTAL_ADDRESS=
+
+# 4. Which market: in = Indian cities (Kolkata, Mumbai, Delhi, ...), us = US cities. Each has its own Sheet tabs.
+MARKET=in
 
 # Optional: where "a business replied" alerts go (empty = the Gmail above)
 OUTREACH_NOTIFY_EMAIL=
@@ -19,7 +23,7 @@ OUTREACH_NOTIFY_EMAIL=
 # The Google key file: put the .json file you downloaded from Google Cloud into the "secrets" folder.
 # Nothing to type for it here: it is found by itself.
 
-# The robot (type  robot on  on the tablet): how many new US cities it searches a day (each takes about 1.5 hours;
+# The robot (type  robot on  on the tablet): how many new cities it searches a day (each takes about 1.5 hours;
 # Austin gave 2,171 businesses), and yes/no switches for its jobs. Nothing to change to start with.
 ROBOT_CITIES_PER_DAY=1
 ROBOT_LEADS=yes

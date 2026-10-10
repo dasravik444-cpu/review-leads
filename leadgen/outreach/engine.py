@@ -22,8 +22,8 @@ from . import templates as T
 from .classify import snippet
 from .inbox import GmailInbox
 from .leads import (FREE_MAIL, STATUS_BOUNCED, STATUS_DONE, STATUS_EMAILED, STATUS_FOLLOWUP, STATUS_INTERESTED,
-                    STATUS_LETTER_QUEUED, STATUS_LETTER_SENT, STATUS_OPTED_IN, STATUS_OPTED_OUT, STATUS_REPLIED, Lead,
-                    email_domain, read_leads)
+                    STATUS_LETTER_QUEUED, STATUS_LETTER_SENT, STATUS_OPTED_IN, STATUS_OPTED_OUT, STATUS_REPLIED,
+                    STATUS_WHATSAPP, Lead, email_domain, read_leads)
 from .mailer import GmailSender, body_text, build_message
 from .sheet import OutreachSheet
 from .whatsapp import LETTER_CODES, REASONS, ads_library_link, result_code, wa_link
@@ -236,6 +236,8 @@ class Outreach:
                 self._set_status(lead, STATUS_OPTED_OUT)
             elif code == "interested":
                 self._set_status(lead, STATUS_INTERESTED)
+            elif code in ("sent", "replied") and lead and lead.status.strip().lower() in ("", "new"):
+                self._set_status(lead, STATUS_WHATSAPP)          # one channel at a time: no e-mail on top
 
     # ------------------------------------------------------------------ inbox
     def _check_inbox(self) -> None:
@@ -687,8 +689,8 @@ class Outreach:
                     continue
                 if any(x.lower() in sup for x in lead.emails):
                     continue
-                if lead.emails and lead.key not in ended:
-                    continue          # e-mail will reach this lead first
+                if lead.emails and lead.key not in ended and self.o["email"]["enabled"]:
+                    continue          # e-mail will reach this lead first (while e-mail is paused, WhatsApp may)
                 choices = [(p, "listed") for p in lead.whatsapp]
                 if w["include_mobiles"]:
                     choices += [(p, "mobile") for p in lead.mobiles() if p not in lead.whatsapp]

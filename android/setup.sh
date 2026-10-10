@@ -7,8 +7,8 @@
 #   getkey    copy the Google key file (.json) from your Download folder
 #   settings  open your settings (settings.txt) to fill in
 #   check     test the Google Sheet and Gmail
-#   leads     find businesses in the next US cities and their e-mail addresses
-#   emails    send today's e-mails (US working hours: about 8 PM - 3 AM India time)
+#   leads     find businesses in the next cities (India, or the US with MARKET=us) and their e-mail addresses
+#   emails    send today's e-mails (office hours; India: 10 AM - 6:30 PM, Monday to Saturday)
 #   import    lead lists from GitHub (leads-<city>.zip) and your PDF, from your Download folder
 #   update    get the newest version of the robot
 #   robot     on | off | status | log: the robot that finds leads and sends e-mails by itself (android/robot.sh)

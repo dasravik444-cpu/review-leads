@@ -1,4 +1,5 @@
-"""The robot's timetable (India time for the lead jobs, Chicago time for e-mails), its records, status and update."""
+"""The robot's timetable (India time for the lead jobs; e-mails in the market's office hours: Chicago time for the
+US, most tests here, and India time for India, the default), its records, status and update."""
 from __future__ import annotations
 
 import importlib.util
@@ -11,8 +12,15 @@ from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+import pytest
+
 ROOT = Path(__file__).resolve().parent.parent
 IST, CHI = ZoneInfo("Asia/Kolkata"), ZoneInfo("America/Chicago")
+
+
+@pytest.fixture(autouse=True)
+def us_market(monkeypatch):
+    monkeypatch.setenv("MARKET", "us")       # no MARKET in the settings: the environment decides (India if unset)
 
 
 def robot(tmp_path, monkeypatch):
@@ -48,33 +56,33 @@ def test_timetable_india_for_leads_chicago_for_emails(tmp_path, monkeypatch):
     assert r.pick_due(at(CHI, 2026, 10, 12, 8, 0), st, {}) is None
     assert r.pick_due(at(CHI, 2026, 10, 12, 9, 36), st, {}).name == "emails"
     assert r.pick_due(at(CHI, 2026, 10, 10, 10, 0), {"jobs": {}}, {}).name != "emails"           # a US Saturday
-    assert r.next_slot(r.JOBS["emails"], at(CHI, 2026, 10, 9, 16, 0)) == datetime(2026, 10, 12, 9, 35, tzinfo=CHI)
+    assert r.next_slot(r.jobs({})["emails"], at(CHI, 2026, 10, 9, 16, 0)) == datetime(2026, 10, 12, 9, 35, tzinfo=CHI)
     # switched off in settings.txt, and a job that found the lock taken waits 5 minutes
     assert r.pick_due(now, {}, {"ROBOT_LEADS": "no", "ROBOT_AUTO_UPDATE": "no"}).name == "backup"
     assert r.pick_due(now, {"jobs": {"leads": {"retry_at": now + 60}}}, {"ROBOT_AUTO_UPDATE": "no"}).name == "backup"
-    assert r.command(r.JOBS["leads"], {"ROBOT_CITIES_PER_DAY": "2"}) == (
+    assert r.command(r.jobs({})["leads"], {"ROBOT_CITIES_PER_DAY": "2"}) == (
         ["bash", "scripts/run.sh", "leads", "--count", "2", "--minutes", "60", "--hunt-minutes", "30"], 220)
-    assert r.command(r.JOBS["emails"], {})[0] == ["bash", "scripts/run.sh", "emails"]   # paced: this hour's share
+    assert r.command(r.jobs({})["emails"], {})[0] == ["bash", "scripts/run.sh", "emails"]   # paced: this hour's share
 
 
 def test_a_job_is_recorded_and_a_busy_lock_means_try_again_soon(tmp_path, monkeypatch):
     r = robot(tmp_path, monkeypatch)
     monkeypatch.setattr(r, "ROOT", tmp_path)
     monkeypatch.setattr(r, "command", lambda job, s: ([sys.executable, "-c", "print('working'); raise SystemExit(0)"], 1))
-    r.run_job(r.JOBS["hunt"], {})
+    r.run_job(r.jobs({})["hunt"], {})
     rec = json.loads(r.STATUS.read_text())["jobs"]["hunt"]
     assert rec["result"] == "ok" and rec["last_started"] <= time.time() and json.loads(r.STATUS.read_text())["running"] is None
     assert "working" in r.log_path().read_text()
     monkeypatch.setattr(r, "command", lambda job, s: ([sys.executable, "-c", "raise SystemExit(3)"], 1))
-    r.run_job(r.JOBS["leads"], {})
+    r.run_job(r.jobs({})["leads"], {})
     rec = json.loads(r.STATUS.read_text())["jobs"]["leads"]
     assert "last_started" not in rec and rec["retry_at"] > time.time() + 200
     monkeypatch.setattr(r, "command", lambda job, s: ([sys.executable, "-c", "raise SystemExit(2)"], 1))
-    r.run_job(r.JOBS["emails"], {})
+    r.run_job(r.jobs({})["emails"], {})
     assert json.loads(r.STATUS.read_text())["jobs"]["emails"]["result"].startswith("failed (exit code 2)")
     code = "import os; print('robot job:', os.environ.get('ROBOT_JOB'))"
     monkeypatch.setattr(r, "command", lambda job, s: ([sys.executable, "-c", code], 1))
-    r.run_job(r.JOBS["hunt"], {})
+    r.run_job(r.jobs({})["hunt"], {})
     assert "robot job: 1" in r.log_path().read_text()           # its Busy text says "the robot" (local_run)
 
 
@@ -84,7 +92,7 @@ def test_a_job_stopped_by_robot_off_runs_again_when_it_is_back_on(tmp_path, monk
     monkeypatch.setattr(r, "run_command", lambda *a, **k: 143)
     at = datetime(2026, 10, 9, 14, 0, tzinfo=IST).timestamp()   # an hour after the 13:00 lead search began
     r.save_status({"jobs": {"leads": {"last_started": at - 86400, "result": "ok"}}})
-    r.run_job(r.JOBS["leads"], {})
+    r.run_job(r.jobs({})["leads"], {})
     rec = json.loads(r.STATUS.read_text())["jobs"]["leads"]
     assert rec["last_started"] == at - 86400 and rec["result"] == "stopped (robot off) - runs again when on"
     switches = {"ROBOT_AUTO_UPDATE": "no", "ROBOT_EMAILS": "no"}
@@ -165,20 +173,20 @@ def test_update_keeps_a_new_version_only_when_it_starts(tmp_path, monkeypatch):
 def test_status_says_when_a_job_whose_time_has_passed_runs(tmp_path, monkeypatch):
     # switched on at 22:09 India time: the update ran, the e-mails run now, today's lead search and hunt follow
     r = robot(tmp_path, monkeypatch)
-    monkeypatch.setattr(r, "email_settings", lambda: {"enabled": True})
+    monkeypatch.setattr(r, "email_settings", lambda *_: {"enabled": True})
     now = datetime(2026, 10, 9, 22, 16, tzinfo=IST).timestamp()
     r.save_status({"scheduler": {"heartbeat": now, "started": now - 420, "version": "abc1234"},
                    "running": {"job": "emails", "since": now - 420},
                    "jobs": {"update": {"last_started": now - 420, "result": "ok: already the newest version"},
                             "backup": {"last_started": now - 600, "result": "ok"}}})
-    rows = {line[:13].strip(): line[81:] for line in r.status_text(now).splitlines()[5:10]}
+    rows = {line[:13].strip(): line[81:] for line in r.status_text(now).splitlines()[6:11]}
     assert rows == {"Update": "Sat 10 Oct 11:00", "E-mails": "now (working on it)",
                     "Lead search": "next (today's time has passed)",
                     "E-mail hunt": "after that (today's time has passed)", "Backup": "Sat 10 Oct 00:30"}
     r.save_status({"scheduler": {"heartbeat": now}, "jobs": {"update": {"last_started": now - 420},
                                                            "emails": {"last_started": now - 60},
                                                            "leads": {"retry_at": now + 240}}})
-    rows = {line[:13].strip(): line[81:] for line in r.status_text(now).splitlines()[4:9]}
+    rows = {line[:13].strip(): line[81:] for line in r.status_text(now).splitlines()[5:10]}
     assert rows["Lead search"] == "Fri 09 Oct 22:20 (another job was running)"
     assert rows["E-mail hunt"] == "now (today's time has passed)"
 
@@ -188,7 +196,7 @@ def test_status_says_when_sending_is_paused_in_the_config(tmp_path, monkeypatch)
     now = datetime(2026, 10, 10, 11, 25, tzinfo=IST).timestamp()
     r.save_status({"scheduler": {"heartbeat": now}})
     e = {"enabled": False, "start_per_day": 15, "step": 5, "step_every_days": 3, "max_per_day": 40}
-    monkeypatch.setattr(r, "email_settings", lambda: e)
+    monkeypatch.setattr(r, "email_settings", lambda *_: e)
     text = r.status_text(now)
     row = next(line for line in text.splitlines() if line.startswith("E-mails "))
     assert row.endswith("Mon 12 Oct 20:05 (09:35 Chicago) - sending PAUSED, reads replies only")
@@ -200,7 +208,7 @@ def test_status_says_when_sending_is_paused_in_the_config(tmp_path, monkeypatch)
 
 def test_status_says_why_a_job_failed_from_that_days_log(tmp_path, monkeypatch):
     r = robot(tmp_path, monkeypatch)
-    monkeypatch.setattr(r, "email_settings", lambda: {"enabled": True})
+    monkeypatch.setattr(r, "email_settings", lambda *_: {"enabled": True})
     started = datetime(2026, 10, 10, 2, 5, tzinfo=IST).timestamp()
     r.log_path(started).write_text("\n".join([
         "01:06:10 [robot] E-mails: ok (1 min)",
@@ -220,3 +228,52 @@ def test_status_says_why_a_job_failed_from_that_days_log(tmp_path, monkeypatch):
              "Done. The new leads are in your Google Sheet"]
     assert r.why_failed(['"notes": []', *lines]) == "OSError: [Errno 28] No space left on device"
     assert r.why_failed(["all fine"]) == ""
+
+
+def test_india_timetable_emails_in_indian_office_hours_and_lead_jobs_in_the_evening(tmp_path, monkeypatch):
+    monkeypatch.setenv("MARKET", "in")
+    r = robot(tmp_path, monkeypatch)
+    assert r.market({}).code == "in" and r.market({"MARKET": "us"}).code == "us"   # settings.txt wins over the default
+    done = {"update": {"last_started": at(IST, 2026, 10, 10, 9, 0)}, "backup": {"last_started": at(IST, 2026, 10, 10, 0, 30)}}
+    # Saturday 10 Oct 2026: e-mails every hour from 10:35 India time (Saturday is a working day in India)
+    assert r.pick_due(at(IST, 2026, 10, 10, 10, 30), {"jobs": done}, {}) is None
+    assert r.pick_due(at(IST, 2026, 10, 10, 10, 36), {"jobs": done}, {}).name == "emails"
+    assert r.pick_due(at(IST, 2026, 10, 10, 10, 36), {"jobs": done}, {"MARKET": "us"}) is None   # US: not now
+    done["emails"] = {"last_started": at(IST, 2026, 10, 10, 17, 35)}
+    assert r.pick_due(at(IST, 2026, 10, 10, 18, 50), {"jobs": done}, {}) is None   # the lead search waits for 19:00
+    assert r.pick_due(at(IST, 2026, 10, 10, 19, 1), {"jobs": done}, {}).name == "leads"
+    timetable = r.jobs({})
+    # no e-mails on Sunday: the next run is Monday 10:35
+    assert r.next_slot(timetable["emails"], at(IST, 2026, 10, 10, 18, 0)) == datetime(2026, 10, 12, 10, 35, tzinfo=IST)
+    assert [timetable[j].times[0] for j in ("update", "leads", "hunt", "backup")] == ["09:00", "19:00", "21:30", "00:30"]
+
+
+def test_india_status_counts_india_cities_and_its_own_emails(tmp_path, monkeypatch):
+    monkeypatch.setenv("MARKET", "in")
+    r = robot(tmp_path, monkeypatch)
+    from leadgen.db import DB
+    from leadgen.outreach.store import OutreachStore
+
+    (tmp_path / "data").mkdir()
+    now = datetime(2026, 10, 10, 11, 0, tzinfo=IST).timestamp()
+    for city in ("kolkata", "austin"):                                   # a US city searched before the switch
+        db = DB(str(tmp_path / "data" / f"{city}.sqlite"))
+        db.conn.execute("INSERT INTO places(key,name,norm_name,provider,first_seen,updated_at,found_date,qualified) "
+                        "VALUES('k','B','b','overture',?,?,'2026-10-10',1)", (now, now))
+        db.conn.commit()
+        db.close()
+    store = OutreachStore(str(tmp_path / "data" / "outreach-in.sqlite"))
+    store.conn.execute("INSERT INTO sends(email,lead_key,step,sent_at,day,status) VALUES('a@b.in','k',1,?,'2026-10-10','sent')",
+                       (now,))
+    store.conn.commit()
+    OutreachStore(str(tmp_path / "data" / "outreach.sqlite"))           # the US memory: not counted for India
+    monkeypatch.setattr(r, "email_settings", lambda *_: {"enabled": False})
+    r.save_status({"scheduler": {"heartbeat": now}, "jobs": {"emails": {"last_started": now - 1440, "result": "ok"}}})
+    text = r.status_text(now)
+    assert "Market: India" in text and "Chicago" not in text
+    assert "Leads found on this tablet in India" in text
+    cities = [line.split()[0] for line in text.splitlines() if line.startswith(("kolkata", "austin"))]
+    assert cities == ["kolkata"]
+    assert "E-mails (sending PAUSED in config/in/_base.toml): 1 sent today" in text
+    row = next(line for line in text.splitlines() if line.startswith("E-mails "))
+    assert row.endswith("Sat 10 Oct 11:35 - sending PAUSED, reads replies only")

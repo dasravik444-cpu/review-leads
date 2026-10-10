@@ -1,0 +1,14 @@
+# Gurugram - one city of the India campaign (config/in/fleet.toml). Shared settings: _base.toml.
+# Made by scripts/make_in_cities.py - edit the list there and run it again.
+include = ["../shared/categories.toml", "_base.toml"]
+
+[campaign]
+id = "in-gurugram"
+timezone = "Asia/Kolkata"
+lead_id_prefix = "GGN"
+
+[area]
+name = "Gurugram"
+aliases = ["Gurgaon", "Cyber Hub", "Golf Course Road", "Sohna Road"]
+center = [28.4595, 77.0266]
+radius_km = 11

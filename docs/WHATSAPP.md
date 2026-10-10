@@ -2,6 +2,13 @@
 
 What the WhatsApp side does, what it never does, and how to set it up on the tablet. Checked 10 October 2026.
 
+**India (the default market since 10 October 2026).** Indian businesses live on WhatsApp, so the India queue also
+takes the **mobile numbers** in the lead list (not only numbers published as WhatsApp): 10 a day at first, 5 more
+every 5 days you actually send, up to 40. While India's e-mail is paused, WhatsApp also reaches businesses that have
+an e-mail address; a business you messaged on WhatsApp is marked *WhatsApp sent* in the India Leads tab and gets no
+e-mail on top. Send them in Indian office hours: **10 AM - 6:30 PM, Monday to Saturday**. The queue is the **India
+WhatsApp Queue** tab. The rest of this page (the rules, the setup) is the same; the US parts are marked.
+
 ## The rules that decide the design
 
 - **WhatsApp bans numbers that send automated or bulk messages.** Its terms list "bulk messaging, auto-messaging,
@@ -33,8 +40,8 @@ WhatsApp number, for people who say yes, and for everyone who writes to you firs
    It starts at 5 a day and adds 5 every 7 days you actually sent, up to 20, because a new number that writes a
    lot of strangers is reported and banned. A number is never queued twice; "Not interested" or STOP puts it on
    the Do Not Contact list.
-2. **You type `whatsapp` on the tablet** between about 8 PM and 2 AM India time on US working days (US office
-   hours; a message at night looks like spam). For each message, WhatsApp Business opens with the text typed; you
+2. **You type `whatsapp` on the tablet** in the businesses' office hours (India: 10 AM - 6:30 PM, Monday to Saturday;
+   US: about 8 PM - 2 AM India time on US working days; a message at night looks like spam). For each message, WhatsApp Business opens with the text typed; you
    press Send, switch back to Termux and press Enter (or `n` = not on WhatsApp, `s` = skip, `q` = stop for now).
    The result goes into the Sheet, and the robot reads it on its next run.
 3. **Later answers** (Replied, Interested, Not interested) you set in the Result column of the WhatsApp Queue tab,
@@ -49,7 +56,7 @@ WhatsApp number, for people who say yes, and for everyone who writes to you firs
    - Category: *Marketing Agency* (or *Business Service*).
    - Description: "More Google reviews for restaurants, cafés, salons and shops: a QR code that opens your Google
      review page in one scan. One-time price, no monthly fees."
-   - E-mail: the business Gmail. Hours: when you answer (for example 8 PM - 3 AM India time = US office hours).
+   - E-mail: the business Gmail. Hours: when you answer (for India for example 10 AM - 7 PM, Monday to Saturday).
 2. **WhatsApp Business on the tablet** (the `whatsapp` command opens chats there):
    - If the number's SIM is in another phone, use the tablet as a linked device: on the phone, WhatsApp Business →
      ⋮ → **Linked devices** → **Link a device**; on the tablet, install WhatsApp Business and choose
@@ -70,16 +77,21 @@ WhatsApp number, for people who say yes, and for everyone who writes to you firs
      - `/preview`: "Here's how it works: we make your QR code, it opens your Google review page, your customers
        scan it at the table or counter, and we send you a report of your new reviews every month. Send me your
        business name and city and I'll make you a free preview with your name on it."
-     - `/price`: "Starter is $100, one time: your QR code linked to your Google review page, print-ready designs
-       for tables, counter, window and receipts, and a monthly review report for 12 months. Pro is $200, one time:
-       everything in Starter plus review requests to your customer list by WhatsApp and e-mail. No monthly fees."
-     - `/pay`: "Here is the PayPal invoice: you can pay by card or PayPal. [paste the invoice link] Thank you!"
+     - `/price` (India): "Starter is ₹3,000, one time: your QR code linked to your Google review page, print-ready
+       designs for tables, counter, window and receipts, and for 12 months a monthly report: your new Google
+       reviews, your rating, and what your Google profile brings you. Pro is ₹8,000, one time: everything in Starter
+       plus review requests to your customer list by WhatsApp and e-mail. No monthly fees."
+       (US: the same with $100 and $200.)
+     - `/pay` (India): "You can pay by UPI to [your UPI ID], or scan the QR code I'm sending. Thank you!" (PayPal
+       does not take payments between two Indian accounts; use UPI, e.g. Google Pay, for Indian customers.)
+       US: "Here is the PayPal invoice: you can pay by card or PayPal. [paste the invoice link] Thank you!"
      - `/stop`: "Understood, I won't message you again. Sorry for the bother!" (then set the Result to
        *Not interested* in the Sheet)
    - **Labels**: New lead, Preview sent, Interested, Paid, Not interested.
 5. **Your WhatsApp number in the settings** (it goes into the e-mail signature and your copy of the PDF): type
    `settings` and set `OUTREACH_SENDER_PHONE=+<country code and number>`, save (Ctrl+O, Enter, Ctrl+X).
-6. **Every US working day**, 8 PM - 2 AM India time: `whatsapp`, and answer what comes back.
+6. **Every working day** in office hours (India: 10 AM - 6:30 PM, Monday to Saturday): `whatsapp`, and answer what
+   comes back.
 
 ## Later: answers by a machine
 

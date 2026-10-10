@@ -604,3 +604,23 @@ def test_us_emails_are_paused_and_end_with_the_address_and_a_way_to_say_no():
     assert "{sender_address}" in e["footer"] and 'Reply "no"' in e["footer"] and "erase" not in e["footer"]
     assert tidy_address("PO Box 12,  Rishra ,West Bengal 712250") == "PO Box 12, Rishra, West Bengal 712250"
     assert tidy_address("Musterstr. 1\n10115 Berlin") == "Musterstr. 1\n10115 Berlin"          # letters: lines kept
+
+
+def test_while_email_is_paused_whatsapp_reaches_email_leads_and_they_are_not_emailed_on_top(tmp_path):
+    leads = [lead(1, "Olive Bistro", email="hello@olivebistro.in", phones="+91 98300 11111 (mobile)", priority="High"),
+             lead(2, "Saffron Cafe", email="hi@saffroncafe.in", phones="+91 33 2222 3333 (landline)", priority="High")]
+    sess, client = sheet_with(leads)
+    smtp, clock = SmtpWorld(), Clock(ts(2026, 10, 14, 11))
+    store = OutreachStore(str(tmp_path / "o.sqlite"))
+    cfg = cfg_with(start_per_day=5)
+    cfg["outreach"]["email"]["enabled"] = False                      # India: e-mail waits for approval
+    cfg["outreach"]["whatsapp"]["include_mobiles"] = True
+    runner(cfg, store, client, clock, smtp).run()
+    assert smtp.sent == [] and [r["Business"] for r in tab(sess, "WhatsApp Queue")] == ["Olive Bistro"]
+    rows = sess.tabs["WhatsApp Queue"]["rows"]
+    rows[1][rows[0].index("Result")] = "Sent"                         # the owner sent it from the tablet
+    clock.t = ts(2026, 10, 15, 11)
+    cfg["outreach"]["email"]["enabled"] = True                        # e-mail switched on later
+    runner(cfg, store, client, clock, smtp).run()
+    assert status_of(sess, "key1") == "WhatsApp sent"
+    assert [m["To"] for m in smtp.sent] == ["hi@saffroncafe.in"]      # one channel at a time

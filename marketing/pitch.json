@@ -8,5 +8,10 @@
   "website": "",
   "example_business": "Joe's Diner",
   "qr_demo": "Example only: Joe's Diner Google review page",
-  "year": "2026"
+  "year": "2026",
+  "price_starter": "$100",
+  "price_pro": "$200",
+  "markets": {
+    "in": {"price_starter": "₹3,000", "price_pro": "₹8,000", "review_report": true, "reply_to": "message"}
+  }
 }

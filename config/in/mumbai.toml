@@ -1,0 +1,14 @@
+# Mumbai - one city of the India campaign (config/in/fleet.toml). Shared settings: _base.toml.
+# Made by scripts/make_in_cities.py - edit the list there and run it again.
+include = ["../shared/categories.toml", "_base.toml"]
+
+[campaign]
+id = "in-mumbai"
+timezone = "Asia/Kolkata"
+lead_id_prefix = "BOM"
+
+[area]
+name = "Mumbai"
+aliases = ["Bombay", "Bandra", "Juhu", "Worli", "Lower Parel", "Colaba", "Andheri", "Powai"]
+center = [19.076, 72.8777]
+radius_km = 22

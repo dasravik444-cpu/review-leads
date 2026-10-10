@@ -362,6 +362,18 @@ def is_chain(name: str, chains: list[str]) -> str | None:
     return None
 
 
+def has_name_word(name: str, words: list[str]) -> str | None:
+    """The first of the words found in a business name as a whole word (plural 's'/'es' allowed; a trailing '*'
+    means any word starting with it), else None. "mess" finds "Sharma Mess", not "Messy Kitchen"."""
+    low = norm_text(name)
+    for w in words:
+        prefix = w.endswith("*")
+        wn = norm_text(w.rstrip("*"))
+        if wn and re.search(r"(^| )" + re.escape(wn) + (r"" if prefix else r"(s|es)?( |$)"), low):
+            return w
+    return None
+
+
 def _word_hits(word: str, label: str) -> bool:
     """Whole-word match (plural 's'/'es' allowed); a trailing '*' in the config word means prefix match."""
     prefix = word.endswith("*")
