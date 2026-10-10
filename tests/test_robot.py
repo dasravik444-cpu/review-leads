@@ -165,6 +165,7 @@ def test_update_keeps_a_new_version_only_when_it_starts(tmp_path, monkeypatch):
 def test_status_says_when_a_job_whose_time_has_passed_runs(tmp_path, monkeypatch):
     # switched on at 22:09 India time: the update ran, the e-mails run now, today's lead search and hunt follow
     r = robot(tmp_path, monkeypatch)
+    monkeypatch.setattr(r, "email_settings", lambda: {"enabled": True})
     now = datetime(2026, 10, 9, 22, 16, tzinfo=IST).timestamp()
     r.save_status({"scheduler": {"heartbeat": now, "started": now - 420, "version": "abc1234"},
                    "running": {"job": "emails", "since": now - 420},
@@ -180,3 +181,18 @@ def test_status_says_when_a_job_whose_time_has_passed_runs(tmp_path, monkeypatch
     rows = {line[:13].strip(): line[81:] for line in r.status_text(now).splitlines()[4:9]}
     assert rows["Lead search"] == "Fri 09 Oct 22:20 (another job was running)"
     assert rows["E-mail hunt"] == "now (today's time has passed)"
+
+
+def test_status_says_when_sending_is_paused_in_the_config(tmp_path, monkeypatch):
+    r = robot(tmp_path, monkeypatch)
+    now = datetime(2026, 10, 10, 11, 25, tzinfo=IST).timestamp()
+    r.save_status({"scheduler": {"heartbeat": now}})
+    e = {"enabled": False, "start_per_day": 15, "step": 5, "step_every_days": 3, "max_per_day": 40}
+    monkeypatch.setattr(r, "email_settings", lambda: e)
+    text = r.status_text(now)
+    row = next(line for line in text.splitlines() if line.startswith("E-mails "))
+    assert row.endswith("Mon 12 Oct 20:05 (09:35 Chicago) - sending PAUSED, reads replies only")
+    assert "E-mails (sending PAUSED in config/us/_base.toml): none sent yet" in text
+    e["enabled"] = True
+    assert "PAUSED" not in r.status_text(now)
+    assert r.email_settings is not None and r.daily_limit(7, e) == 25           # 15, +5 every 3 sending days

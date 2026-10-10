@@ -74,7 +74,10 @@ phone; its first line is the switch (`Switch: ON`). `robot log` shows today's lo
 is on saves first, up to 3 minutes, and runs again when the robot is back on), `robot run leads` runs a job now. It starts again by itself after a restart of the tablet (Termux:Boot app) and within 15 minutes if
 Android closes it (Termux:API app); both apps are already there for Plant Parlour. Keep the tablet charging and on
 Wi-Fi, and Termux on **Battery: Unrestricted** and **Autostart: on** (Settings → Apps → Termux). More than one city a
-day: `ROBOT_CITIES_PER_DAY=2` in `settings`; a job off: `ROBOT_EMAILS=no` (or `ROBOT_LEADS=no`).
+day: `ROBOT_CITIES_PER_DAY=2` in `settings`; a job off: `ROBOT_EMAILS=no` (or `ROBOT_LEADS=no`). Sending can also
+be paused in the code (`enabled = false` under `[outreach.email]` in `config/us/_base.toml`, reaching the tablet with
+`update` or the robot's own 11:00 update): the robot then sends nothing, follow-ups included, but still reads replies
+and bounces, and `robot status` says **sending PAUSED**.
 
 **By hand instead:** `leads` finds businesses (3 cities, about 4½ hours; `leads --count 1` one city), `emails` sends
 this hour's share of the day's e-mails between about **8 PM and 3 AM India time** on US working days. A command typed

@@ -70,7 +70,7 @@ DEFAULTS: dict = {
                   "window_start": "10:00", "window_end": "18:30", "days": ["mon", "tue", "wed", "thu", "fri", "sat"],
                   "skip_dates": [], "follow_up_days": [3, 7], "include_unverified": False, "one_per_domain": True,
                   "pause_bounce_rate": 0.05, "pause_min_sends": 20, "max_bounces_per_day": 3, "run_budget_minutes": 35,
-                  "subjects": [], "first": "", "follow_ups": [], "attachment": ""},
+                  "subjects": [], "first": "", "follow_ups": [], "footer": "", "attachment": ""},
         "whatsapp": {"enabled": True, "start_per_day": 20, "step": 10, "step_every_days": 3, "max_per_day": 50,
                      "include_mobiles": True, "message": "", "opted_in_message": ""},
         # Postal letters (the first contact where cold e-mail is not allowed, e.g. Germany): a daily "Letters"
@@ -279,7 +279,7 @@ def _outreach_errors(o: dict) -> list[str]:
     from .outreach.templates import unknown_placeholders
 
     texts = [("email.subjects", s) for s in e.get("subjects") or []] + [("email.first", e.get("first") or "")]
-    texts += [("email.follow_ups", s) for s in e.get("follow_ups") or []]
+    texts += [("email.follow_ups", s) for s in e.get("follow_ups") or []] + [("email.footer", e.get("footer") or "")]
     texts += [("whatsapp.message", w.get("message") or ""), ("whatsapp.opted_in_message", w.get("opted_in_message") or "")]
     lt = o.get("letters") or {}
     texts += [("letters.text", lt.get("text") or ""), ("offer", o.get("offer") or "")]

@@ -415,14 +415,22 @@ def email_counts(now: float) -> dict:
         return {}
 
 
-def daily_limit(days_sent: int) -> int:
-    """Today's e-mail limit, the way the outreach engine works it out (config/us/_base.toml [outreach.email])."""
+def email_settings() -> dict:
+    """The e-mail part of the outreach config (config/us/_base.toml [outreach.email]); {} if it cannot be read."""
     try:
         from leadgen.config import load_config
 
-        e = load_config(str(ROOT / "config" / "us" / "outreach.toml"))["outreach"]["email"]
+        return load_config(str(ROOT / "config" / "us" / "outreach.toml"))["outreach"]["email"]
+    except Exception:  # noqa: BLE001 - only for the status
+        return {}
+
+
+def daily_limit(days_sent: int, e: dict | None = None) -> int:
+    """Today's e-mail limit, the way the outreach engine works it out."""
+    e = email_settings() if e is None else e
+    try:
         return min(e["max_per_day"], e["start_per_day"] + e["step"] * (days_sent // e["step_every_days"]))
-    except Exception:  # noqa: BLE001 - only for the status line
+    except (KeyError, TypeError, ZeroDivisionError):
         return 0
 
 
@@ -448,6 +456,8 @@ def status_text(now: float | None = None) -> str:
         lines.append(f"Working on: {JOBS[running['job']].title} (since {fmt(running['since'])})")
     lines += ["", f"{'Job':<13}{'Last run (India time)':<24}{'Result':<44}Next run (India time)"]
     queued = 0                         # jobs whose time today has passed (e.g. the robot was off): one after the other
+    e_cfg = email_settings()
+    paused = e_cfg.get("enabled") is False           # sending paused in the config: the job only reads replies
     for name in PRIORITY:
         job, rec = JOBS[name], (st.get("jobs") or {}).get(name) or {}
         nxt = next_slot(job, now)
@@ -463,6 +473,8 @@ def status_text(now: float | None = None) -> str:
                 nxt_text = ("now" if not running and not queued else "next" if not queued else "after that") + \
                     " (today's time has passed)"
                 queued += 1
+        if name == "emails" and paused and switched_on(job, settings):
+            nxt_text += " - sending PAUSED, reads replies only"
         lines.append(f"{job.title:<13}{fmt(rec.get('last_started')):<24}{(rec.get('result') or '-')[:42]:<44}{nxt_text}")
     counts = lead_counts()
     if counts:
@@ -475,12 +487,15 @@ def status_text(now: float | None = None) -> str:
         if len(counts) > 1:
             lines.append(f"{'All cities':<16}{tot[0]:>11,}{pct(tot[1], tot[0]):>13}{pct(tot[2], tot[0]):>13}{tot[3]:>10,}")
     em = email_counts(now)
+    head = "E-mails (sending PAUSED in config/us/_base.toml)" if paused else "E-mails"
     if em:
-        cap = daily_limit(em["days"])
+        cap = daily_limit(em["days"], e_cfg)
         r = em["replies"]
-        lines += ["", f"E-mails: {em['today']} sent today (today's limit {cap}, rising slowly to 40), {em['all']} in all "
+        lines += ["", f"{head}: {em['today']} sent today (today's limit {cap}, rising slowly to 40), {em['all']} in all "
                       f"({em['first']} first e-mails); bounced {em['bounced']}; replies: interested {r.get('positive', 0)}, "
                       f"not interested {r.get('negative', 0)}, other {r.get('other', 0)}"]
+    elif paused:
+        lines += ["", f"{head}: none sent yet"]
     return "\n".join(lines)
 
 

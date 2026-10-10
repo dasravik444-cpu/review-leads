@@ -577,3 +577,30 @@ def test_owner_gets_a_blind_copy_and_a_check_only_run_sends_nothing(tmp_path):
     code, s = runner(cfg_with(), store, client, clock, smtp, max_emails=0).run()
     assert code == 0 and len(smtp.sent) == 1 and s["new"] == 0
     assert any("check only" in n for n in s["notes"])
+
+
+def test_a_campaign_footer_replaces_the_standard_one_and_the_address_is_written_tidily(tmp_path):
+    sess, client = sheet_with(LEADS)
+    footer = '{sender_business}\nWhatsApp/phone: {sender_phone}\n\n{sender_address} · Not interested? Reply "no".'
+    cfg = cfg_with(start_per_day=1, footer=footer)
+    cfg["outreach"]["sender"] = {**SENDER, "postal_address": "daspara, rishra , west bengal 712250 , kolkata india"}
+    runner(cfg, OutreachStore(str(tmp_path / "o.sqlite")), client, Clock(ts(2026, 10, 14, 11)), SmtpWorld(),
+           live=False).run()
+    body = tab(sess, "Email Preview")[0]["Body"]
+    assert body.endswith('Green Supply Co\nWhatsApp/phone: +91 90000 00000\n\n'
+                         'Daspara, Rishra, West Bengal 712250, Kolkata India · Not interested? Reply "no".')
+    assert "erase" not in body and "public listing" not in body
+
+
+def test_us_emails_are_paused_and_end_with_the_address_and_a_way_to_say_no():
+    # The owner paused sending until the new texts are approved; US law (CAN-SPAM) wants both in every e-mail.
+    from leadgen.config import load_config
+    from leadgen.outreach.templates import tidy_address
+
+    from pathlib import Path
+
+    e = load_config(str(Path(__file__).resolve().parent.parent / "config/us/outreach.toml"))["outreach"]["email"]
+    assert e["enabled"] is False
+    assert "{sender_address}" in e["footer"] and 'Reply "no"' in e["footer"] and "erase" not in e["footer"]
+    assert tidy_address("PO Box 12,  Rishra ,West Bengal 712250") == "PO Box 12, Rishra, West Bengal 712250"
+    assert tidy_address("Musterstr. 1\n10115 Berlin") == "Musterstr. 1\n10115 Berlin"          # letters: lines kept

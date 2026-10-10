@@ -7,7 +7,7 @@ Germany. Every template can be replaced in the config ([outreach.email], [outrea
 
 Placeholders: {greeting} {business} {first_name} {first_name_or_team} {audience} {place} {hook} {usp} {intro}
 {offer} {demo_link} {sender_name} {sender_first} {sender_business} {sender_phone} {sender_city}
-{sender_address} {sender_website} {footer} {source_line}
+{sender_address} {sender_website} {footer} {source_line}. A campaign can have its own footer ([outreach.email] footer).
 
 What the messages promise has to stay true to the product and to Google's review rules: every guest is asked
 the same way, nothing is offered in return for a review, and nobody is pushed (see docs/COMPLIANCE.md).
@@ -281,7 +281,7 @@ def context(lead, oc: dict, lang: str = "") -> dict:
         "sender_business": s.get("business", "").strip(),
         "sender_phone": s.get("phone", "").strip(),
         "sender_city": s.get("city", "").strip(),
-        "sender_address": s.get("postal_address", "").strip(),
+        "sender_address": tidy_address(s.get("postal_address", "")),
         "sender_website": s.get("website", "").strip(),
         "person": person,
         "offer": str(oc.get("offer") or "").strip() or t["offer"],
@@ -294,8 +294,17 @@ def context(lead, oc: dict, lang: str = "") -> dict:
     ctx["usp"] = usp
     ctx["intro"] = render(t["intro_usp"] if usp and t["intro_usp"] else t["intro_plain"], ctx)
     ctx["source_line"] = render(t["source_line"], ctx) if t.get("source_line") else ""
-    ctx["footer"] = render(t["footer"], ctx)
+    ctx["footer"] = render((oc.get("email") or {}).get("footer") or t["footer"], ctx)
     return ctx
+
+
+def tidy_address(text: str) -> str:
+    """The postal address as typed in the settings, written tidily: single spaces, ", " between parts, and
+    capital letters when it was typed all in small letters ("daspara, rishra , west bengal" -> "Daspara, Rishra,
+    West Bengal")."""
+    lines = [re.sub(r"\s*,\s*", ", ", re.sub(r"[ \t]+", " ", line)).strip(" ,") for line in (text or "").splitlines()]
+    out = "\n".join(line for line in lines if line)
+    return string.capwords(out, " ") if out == out.lower() and "\n" not in out else out
 
 
 def letter_context(lead, oc: dict, lang: str = "") -> dict:
