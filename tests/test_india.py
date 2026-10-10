@@ -30,35 +30,41 @@ def test_india_is_the_default_market_and_us_stays_one_setting_away(monkeypatch):
     assert market.current({"MARKET": "US "}).code == "us" and market.current({"MARKET": "mars"}).code == "in"
 
 
-def test_india_city_files_premium_six_categories_own_tabs_and_no_overlap():
+def test_india_city_files_premium_five_kinds_own_tabs_and_no_overlap():
     files = city_files()
     assert len(files) == 16
     cfgs = [load_config(f) for f in files]
     for cfg in cfgs:
         assert cfg["campaign"]["country"] == "IN" and country.active().code == "IN"
         assert cfg["campaign"]["timezone"] == "Asia/Kolkata"
-        assert {c["key"] for c in cfg.categories} == {"restaurant", "cafe", "bar", "bakery", "salon", "gym"}
+        assert {c["key"] for c in cfg.categories} == {"restaurant", "cafe", "bar", "salon", "gym"}
         sh = cfg["sheets"]
         assert (sh["leads_tab"], sh["plan_tab"], sh["report_tab"]) == ("India Leads", "", "India Daily Report")
         assert sh["require_presence"] == ["website", "instagram"]
         assert cfg["plan"]["order"] == "center_out"
+        # Bengaluru: a 7-day campaign; the others about 1,000 businesses a day, as many days as that takes
+        assert (cfg["plan"]["days"], cfg["plan"]["daily_target"]) == (
+            (7, "auto") if cfg["campaign"]["id"] == "in-bengaluru" else ("auto", 1000))
     assert len({c["campaign"]["id"] for c in cfgs}) == len({c["campaign"]["lead_id_prefix"] for c in cfgs}) == 16
     for a, b in itertools.combinations(cfgs, 2):        # a business never belongs to two cities
         d = haversine_km(*a["area"]["center"], *b["area"]["center"])
         assert d >= a["area"]["radius_km"] + b["area"]["radius_km"], (a["campaign"]["id"], b["campaign"]["id"])
     fleet = tomllib.loads((ROOT / "config" / "in" / "fleet.toml").read_text(encoding="utf-8"))
-    assert fleet["cities"][0] == "kolkata" and sorted(fleet["cities"]) == sorted(Path(f).stem for f in files)
+    assert fleet["cities"][:5] == ["bengaluru", "kolkata", "chennai", "delhi", "mumbai"]
+    assert sorted(fleet["cities"]) == sorted(Path(f).stem for f in files)
 
 
-def test_india_outreach_has_its_own_tabs_rupee_offer_and_waits_for_approval():
+def test_india_outreach_has_its_own_tabs_rupee_offer_and_runs_every_day():
     cfg = load_config(str(ROOT / "config" / "in" / "outreach.toml"))
     o = cfg["outreach"]
     assert o["tabs"]["outreach"] == "India Outreach" and o["tabs"]["whatsapp"] == "India WhatsApp Queue"
     assert o["tabs"]["dnc"] == "Do Not Contact"                      # shared with the US: a "no" counts everywhere
     assert "₹3,000" in o["offer"] and "$" not in o["offer"]
-    assert o["email"]["enabled"] is False                            # paused until the India e-mail is approved
-    assert o["email"]["days"] == ["mon", "tue", "wed", "thu", "fri", "sat"]
-    assert o["whatsapp"]["include_mobiles"] is True and o["whatsapp"]["start_per_day"] <= 10
+    assert o["email"]["enabled"] is True                             # on since 11 October 2026
+    assert o["email"]["days"] == ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+    w = o["whatsapp"]
+    assert w["include_mobiles"] is True and w["include_landlines"] is True     # every phone number is tried
+    assert (w["start_per_day"], w["step"], w["step_every_days"], w["max_per_day"]) == (10, 5, 1, 40)
     assert "{sender_postal_address}" not in o["email"]["footer"]
 
 

@@ -145,16 +145,23 @@ def fleet() -> list[str]:
 
 
 def next_cities(n: int, cities: list[str] | None = None, done_elsewhere: list[str] | None = None) -> list[str]:
-    """Cities never searched first (in the fleet's order; those already searched on GitHub after the others),
-    then the city searched longest ago on this computer."""
+    """A city whose campaign is under way first (it runs every day until it is finished, e.g. Bengaluru's 7 days),
+    then cities never searched (in the fleet's order; those already searched on GitHub after the others), then the
+    city searched longest ago on this computer."""
+    from leadgen.progress import city_progress
+
     cities = cities or fleet()
     elsewhere = set(_fleet_file().get("searched_on_github", []) if done_elsewhere is None else done_elsewhere)
+    today = datetime.now(market().tz).date()
 
-    def last_run(c: str) -> float:
+    def rank(c: str) -> tuple:
         db = DATA / f"{c}.sqlite"
-        return db.stat().st_mtime if db.exists() else (-1.0 if c in elsewhere else -2.0)
+        if not db.exists():
+            return (1, -1.0 if c in elsewhere else -2.0)
+        state = city_progress(db, today)
+        return (0 if state and state["unfinished"] else 2, db.stat().st_mtime)
     order = {c: i for i, c in enumerate(cities)}
-    return sorted(cities, key=lambda c: (last_run(c), order[c]))[:n]
+    return sorted(cities, key=lambda c: (*rank(c), order[c]))[:n]
 
 
 def working_hours(now: datetime | None = None) -> tuple[bool, str]:
@@ -363,25 +370,68 @@ def cmd_import(a) -> int:
                        *(["--dry-run"] if a.dry_run else []))
 
 
+TEMPORARY = 5                          # whatsapp: the Sheet or the internet did not answer - try again later
+
+
+def phone_e164(raw: str) -> str:
+    """A phone number typed by hand ("987-654-3210") in international form ("+919876543210"); "" if it is not one.
+    Without a country code it is taken as a number of the market's country."""
+    import phonenumbers
+
+    try:
+        num = phonenumbers.parse(raw, "IN" if market().code == "in" else "US")
+    except phonenumbers.NumberParseException:
+        return ""
+    return phonenumbers.format_number(num, phonenumbers.PhoneNumberFormat.E164) if phonenumbers.is_valid_number(num) else ""
+
+
 def cmd_whatsapp(a) -> int:
-    """The WhatsApp Queue from the tablet (android/whatsapp.sh): list, the next message, a result. Sends nothing."""
+    """The WhatsApp Queue from the tablet (android/whatsapp.sh): list, the next message, a result, a test message.
+    Sends nothing. The Sheet or the internet not answering is no crash: exit code 5, and the tablet tries again."""
+    try:
+        return _whatsapp(a)
+    except Exception as exc:  # noqa: BLE001 - the tablet's loop must go on; nothing is lost (it keeps the result)
+        print(f"The Google Sheet did not answer ({type(exc).__name__}: {str(exc)[:150]}). Nothing is lost - "
+              "try again in a minute.")
+        return TEMPORARY
+
+
+def _whatsapp(a) -> int:
     sys.path.insert(0, str(ROOT))
     from leadgen.config import load_config
     from leadgen.outreach import wa_queue
+    from leadgen.outreach.whatsapp import wa_link
     from leadgen.sheets import SheetsClient
 
     cfg = load_config(str(ROOT / conf("outreach")))
     client, tab = SheetsClient(cfg.sheet_id), cfg["outreach"]["tabs"]["whatsapp"]
+    line = lambda *fields: print("\t".join(" ".join(str(f).split()) or "-" for f in fields))  # noqa: E731
+    if a.action == "test":
+        number = phone_e164(a.number)
+        if not number:
+            print(f"{a.number!r} is not a phone number. Type it with the country code (+91 98765 43210) or as "
+                  "10 digits (9876543210).")
+            return 2
+        items = wa_queue.pending(client, tab)          # reads the Sheet: shows the tablet is connected to it
+        business = cfg["outreach"]["sender"].get("business") or "Aurenflow"
+        text = (f"Test message from {business}: the WhatsApp system on our tablet is running and synced with our lead "
+                f"sheet ({len(items)} message{'' if len(items) == 1 else 's'} in today's queue). No need to reply.")
+        print(f"Google Sheet: connected, {len(items)} message{'' if len(items) == 1 else 's'} in the {tab} tab.")
+        line(0, "-", number, "-", "Test message", wa_link(number, text))
+        return 0
     if a.action == "mark":
         row = wa_queue.mark(client, tab, a.row, "" if a.key == "-" else a.key, a.number, a.result)
         print(f"Saved: {a.result}" if row else "That message is no longer in the WhatsApp Queue tab - nothing saved.")
         return 0 if row else 1
     items = wa_queue.pending(client, tab)
     if a.action == "next":
+        digits = lambda n: "".join(ch for ch in str(n) if ch.isdigit())  # noqa: E731
+        skip = {digits(n) for n in (a.skip or [])}
+        items = [it for it in items if digits(it["number"]) not in skip]       # done this time, maybe not saved yet
         if items:
             it = items[0]
             # one line for android/whatsapp.sh: tab-separated, no field empty (bash would merge two tabs)
-            print("\t".join(" ".join(str(it[k]).split()) or "-" for k in ("row", "key", "number", "lead_id", "business", "link")))
+            line(*(it[k] for k in ("row", "key", "number", "lead_id", "business", "link")))
         return 0
     m = market()
     ok, when = working_hours()
@@ -418,7 +468,10 @@ def main(argv=None) -> int:
     wa_sub = wa.add_subparsers(dest="action", required=True)
     wl = wa_sub.add_parser("list", help="the messages waiting")
     wl.add_argument("--now", action="store_true", help="also outside office hours")
-    wa_sub.add_parser("next", help="the next message, as one line for the tablet")
+    wn = wa_sub.add_parser("next", help="the next message, as one line for the tablet")
+    wn.add_argument("--skip", action="append", default=[], help="a number already dealt with this time")
+    wt = wa_sub.add_parser("test", help="a test message to one number, as one line for the tablet")
+    wt.add_argument("number")
     wm = wa_sub.add_parser("mark", help="the result of one message")
     wm.add_argument("row", type=int)
     wm.add_argument("key")

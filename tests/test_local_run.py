@@ -82,9 +82,11 @@ def test_india_market_office_hours_cities_and_files(monkeypatch, tmp_path):
     ist = ZoneInfo("Asia/Kolkata")
     assert lr.working_hours(datetime(2026, 10, 12, 11, 0, tzinfo=ist)) == (True, "Monday 11:00 in India")
     assert lr.working_hours(datetime(2026, 10, 10, 17, 0, tzinfo=ist))[0]                     # Saturday too
-    assert not lr.working_hours(datetime(2026, 10, 11, 11, 0, tzinfo=ist))[0]                 # not on Sunday
-    assert not lr.working_hours(datetime(2026, 10, 12, 21, 0, tzinfo=ist))[0]                 # nor at night
-    assert lr.fleet()[0] == "kolkata" and lr.conf("kolkata") == "config/in/kolkata.toml"
+    assert lr.working_hours(datetime(2026, 10, 11, 11, 0, tzinfo=ist))[0]                     # and Sunday
+    assert not lr.working_hours(datetime(2026, 10, 12, 21, 0, tzinfo=ist))[0]                 # not at night
+    assert not lr.working_hours(datetime(2026, 10, 12, 9, 30, tzinfo=ist))[0]                 # nor before 10
+    assert lr.fleet()[:5] == ["bengaluru", "kolkata", "chennai", "delhi", "mumbai"]
+    assert lr.conf("kolkata") == "config/in/kolkata.toml"
     assert all((ROOT / lr.conf(c)).is_file() for c in lr.fleet())
     monkeypatch.setattr(lr, "DATA", tmp_path)
     assert lr.attachment().name == "pitch-in.pdf"                    # the India PDF, not the US one
@@ -277,3 +279,42 @@ def test_a_test_email_lists_what_was_sent_and_claims_no_more_than_gmail_said(tmp
     monkeypatch.setattr(lr, "leadgen", lambda *a: fake_leadgen(*a, result="invalid"))
     lr.cmd_emails(type("A", (), args)())
     assert "blind copy" not in capsys.readouterr().out                    # nothing went out: no copy either
+
+
+def campaign_db(path, start: str, open_searches: int, done_searches: int, days: int = 7, mapped: int = 0):
+    """A city's memory file with a campaign plan: some searches done, some still open."""
+    from leadgen.db import DB
+
+    db = DB(str(path))
+    for i in range(1, days + 1):
+        db.conn.execute("INSERT INTO parts(id,name,status) VALUES(?,?,'pending')", (i, f"part {i}"))
+    for i in range(open_searches + done_searches):
+        db.conn.execute("INSERT INTO tasks(kind,key,status,part_id,created_at,updated_at) VALUES('search',?,?,1,0,0)",
+                        (f"s{i}", "pending" if i < open_searches else "done"))
+    for i in range(mapped):
+        db.conn.execute("INSERT INTO open_places(id,release,name,lat,lng) VALUES(?,?,?,0,0)", (f"o{i}", "r", f"B{i}"))
+    db.set_meta("start_date", start)
+    db.conn.commit()
+    db.close()
+
+
+def test_a_city_campaign_under_way_runs_every_day_until_it_is_finished(tmp_path, monkeypatch):
+    monkeypatch.setenv("MARKET", "in")
+    lr = local_run()
+    monkeypatch.setattr(lr, "DATA", tmp_path)
+    today = datetime.now(ZoneInfo("Asia/Kolkata")).date().isoformat()
+    assert lr.next_cities(1) == ["bengaluru"]                                    # nothing searched yet: your order
+    campaign_db(tmp_path / "bengaluru.sqlite", today, open_searches=60, done_searches=40)
+    assert lr.next_cities(1) == ["bengaluru"]                                    # day 1 of 7: Bengaluru again
+    assert lr.next_cities(2) == ["bengaluru", "kolkata"]
+    campaign_db(tmp_path / "chennai.sqlite", "2026-09-01", open_searches=5, done_searches=5)   # stuck for weeks
+    assert lr.next_cities(1) == ["bengaluru"]
+    (tmp_path / "bengaluru.sqlite").unlink()
+    campaign_db(tmp_path / "bengaluru.sqlite", today, open_searches=0, done_searches=100)      # finished
+    assert lr.next_cities(2) == ["kolkata", "delhi"]                           # chennai: left (stuck), searched before
+
+    from leadgen.progress import city_progress
+
+    state = city_progress(tmp_path / "chennai.sqlite", datetime(2026, 9, 3).date())
+    assert state == {"day": 3, "days": 7, "searched_pct": 50, "open": 5, "mapped": 0, "unfinished": True}
+    assert city_progress(tmp_path / "missing.sqlite") is None

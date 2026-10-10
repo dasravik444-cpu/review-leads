@@ -691,9 +691,13 @@ class Outreach:
                     continue
                 if lead.emails and lead.key not in ended and self.o["email"]["enabled"]:
                     continue          # e-mail will reach this lead first (while e-mail is paused, WhatsApp may)
+                # One number at a time: the WhatsApp number first, then mobiles, then (include_landlines) the rest;
+                # the next one only once the owner marked the one before "Not on WhatsApp".
                 choices = [(p, "listed") for p in lead.whatsapp]
                 if w["include_mobiles"]:
                     choices += [(p, "mobile") for p in lead.mobiles() if p not in lead.whatsapp]
+                if w.get("include_landlines"):
+                    choices += [(p, "phone") for p in lead.other_phones() if p not in lead.whatsapp]
                 for phone, reason in choices:
                     if phone in queued_phones or phone.lower() in sup:
                         continue

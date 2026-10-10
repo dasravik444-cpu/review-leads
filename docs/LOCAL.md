@@ -64,13 +64,20 @@ unless `settings` says `MARKET=us`; each market has its own cities, its own tabs
 | When (India time) | India (the default) | US (`MARKET=us`) |
 |---|---|---|
 | newest version (kept only if it starts cleanly) | 09:00 | 11:00 |
-| e-mails: first e-mails with the PDF, follow-ups, replies and bounces; fills the WhatsApp Queue | every hour 10:35 - 17:35, Monday to Saturday | every hour 09:35 - 15:35 Chicago time, Monday to Friday (20:05 - 02:05 India time; from 1 November 21:05 - 03:05) |
-| the next city: an hour of search, then 30 minutes of e-mail hunt (Austin gave 2,171 businesses) | 19:00 | 13:00 |
+| e-mails: first e-mails with the PDF, follow-ups, replies and bounces; fills the WhatsApp Queue | every hour 10:35 - 17:35, every day | every hour 09:35 - 15:35 Chicago time, Monday to Friday (20:05 - 02:05 India time; from 1 November 21:05 - 03:05) |
+| lead search: the city whose campaign is under way (else the next one), then 30 minutes of e-mail hunt (Austin gave 2,171 businesses) | 19:00, up to 3 hours (about 1,000 businesses a day; it stops sooner when the day's share is done) | 13:00, 1 hour |
 | an hour more of e-mail hunt for businesses of earlier cities that still have no e-mail | 21:30 | 17:30 |
 | a backup of its memory into the tablet's Documents folder (`review-leads-backup`, last 7 days) | 00:30 | 00:30 |
 
 India: a business goes into the Sheet with an e-mail, WhatsApp or phone number **and** its own website or Instagram
-(the premium focus). US: every business with an e-mail, WhatsApp or phone number. E-mails start at 15 a day and rise by
+(the premium focus). US: every business with an e-mail, WhatsApp or phone number.
+
+**India's lead campaign, city by city** (`config/in/fleet.toml`): Bengaluru, Kolkata, Chennai, Delhi, Mumbai, then
+the other 11. The robot stays on a city every evening until its campaign is finished, then takes the next one:
+Bengaluru is a 7-day campaign (all its cafés, restaurants, bars, salons and gyms spread over 7 evenings); the other
+cities take about 1,000 businesses a day, as many days as that needs (a city with 20,000 takes about 20 days).
+`robot status` shows the campaign under way: which day, how much of the city is searched, and how many businesses of
+these kinds the open map data has there. `ROBOT_LEAD_MINUTES=240` in `settings` gives the lead search more time. E-mails start at 15 a day and rise by
 5 every 3 sending days to 40 (a new Gmail that sends much more is soon treated as spam). `robot status` shows what it does,
 the last and next run of each job, and per city how many businesses it found and how many have an e-mail and a
 phone; its first line is the switch (`Switch: ON`). `robot log` shows today's log, `robot off` stops it (the job it
@@ -84,7 +91,7 @@ its e-mail): the robot then sends nothing, follow-ups included, but still reads 
 and bounces, and `robot status` says **sending PAUSED**.
 
 **By hand instead:** `leads` finds businesses (3 cities, about 4½ hours; `leads --count 1` one city), `emails` sends
-this hour's share of the day's e-mails in office hours (India: **10 AM - 6:30 PM, Monday to Saturday**; US: about
+this hour's share of the day's e-mails in office hours (India: **10 AM - 6:30 PM, every day**; US: about
 **8 PM - 3 AM India time** on US working days). A command typed
 while the robot is on a job says so (`Busy: e-mail sending (the robot, since 22:09 India time)`): try again later.
 `import` instead waits for that job to finish and then runs by itself. `whatsapp` goes through today's WhatsApp

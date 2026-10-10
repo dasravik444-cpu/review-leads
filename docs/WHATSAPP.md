@@ -2,12 +2,31 @@
 
 What the WhatsApp side does, what it never does, and how to set it up on the tablet. Checked 10 October 2026.
 
-**India (the default market since 10 October 2026).** Indian businesses live on WhatsApp, so the India queue also
-takes the **mobile numbers** in the lead list (not only numbers published as WhatsApp): 10 a day at first, 5 more
-every 5 days you actually send, up to 40. While India's e-mail is paused, WhatsApp also reaches businesses that have
-an e-mail address; a business you messaged on WhatsApp is marked *WhatsApp sent* in the India Leads tab and gets no
-e-mail on top. Send them in Indian office hours: **10 AM - 6:30 PM, Monday to Saturday**. The queue is the **India
-WhatsApp Queue** tab. The rest of this page (the rules, the setup) is the same; the US parts are marked.
+**India (the default market since 10 October 2026; every day from 11 October).** Indian businesses live on
+WhatsApp, so in India **every phone number counts as a WhatsApp number**: the queue takes a business's WhatsApp
+number first, then its mobiles, then its other numbers (landlines: some businesses run WhatsApp Business on them),
+**one at a time**. When WhatsApp says a number is not on WhatsApp, press `n`: that number is never tried again and
+the business's next number is queued on the robot's next run (within the hour); a business with no number left is
+simply passed over. Businesses with an e-mail address get the e-mail first; WhatsApp goes to those without one (and
+to those whose e-mails got no answer). A business you messaged is marked *WhatsApp sent* in the India Leads tab and
+gets no e-mail on top. Pace: **10 on the first day, 5 more after each day you actually sent, up to 40** a day. Send
+them **10 AM - 6:30 PM, every day** (Sunday too). The queue is the **India WhatsApp Queue** tab. The rest of this page
+(the rules, the setup) is the same; the US parts are marked.
+
+**Why you still press Send yourself.** WhatsApp's terms forbid automatic and bulk messages and it bans numbers that
+send them; a robot that sent the list by itself would cost you the new number within days. So the tablet does
+everything else (finds the next business and number, opens the chat with the message typed, saves the result,
+moves on) and you press Send: about 10 seconds a message. The tablet cannot see inside WhatsApp, so the one thing it
+learns from you is the answer: Enter (sent) or `n` (WhatsApp said the number is not on WhatsApp).
+
+**Made not to fall over.** No internet, or the Google Sheet not answering: the tablet tries three times, then says so
+plainly and stops; nothing is lost. A result the Sheet could not take is kept on the tablet and saved by itself the
+next time; that chat is never opened twice. A wrong key just asks again. Ctrl+C stops cleanly.
+
+**A test message first:** `whatsapp test` and a number, e.g. `whatsapp test 98765 43210` (10 digits are taken as an
+Indian number). It reads
+the Sheet (so you see the tablet is connected to it), opens WhatsApp Business with a test message typed, you press
+Send, and it tells you whether Termux, the Sheet and WhatsApp Business work together. Nothing is saved in the Sheet.
 
 ## The rules that decide the design
 
@@ -40,7 +59,7 @@ WhatsApp number, for people who say yes, and for everyone who writes to you firs
    It starts at 5 a day and adds 5 every 7 days you actually sent, up to 20, because a new number that writes a
    lot of strangers is reported and banned. A number is never queued twice; "Not interested" or STOP puts it on
    the Do Not Contact list.
-2. **You type `whatsapp` on the tablet** in the businesses' office hours (India: 10 AM - 6:30 PM, Monday to Saturday;
+2. **You type `whatsapp` on the tablet** in the businesses' office hours (India: 10 AM - 6:30 PM, every day;
    US: about 8 PM - 2 AM India time on US working days; a message at night looks like spam). For each message, WhatsApp Business opens with the text typed; you
    press Send, switch back to Termux and press Enter (or `n` = not on WhatsApp, `s` = skip, `q` = stop for now).
    The result goes into the Sheet, and the robot reads it on its next run.
@@ -56,7 +75,7 @@ WhatsApp number, for people who say yes, and for everyone who writes to you firs
    - Category: *Marketing Agency* (or *Business Service*).
    - Description: "More Google reviews for restaurants, cafés, salons and shops: a QR code that opens your Google
      review page in one scan. One-time price, no monthly fees."
-   - E-mail: the business Gmail. Hours: when you answer (for India for example 10 AM - 7 PM, Monday to Saturday).
+   - E-mail: the business Gmail. Hours: when you answer (for India for example 10 AM - 7 PM, every day).
 2. **WhatsApp Business on the tablet** (the `whatsapp` command opens chats there):
    - If the number's SIM is in another phone, use the tablet as a linked device: on the phone, WhatsApp Business →
      ⋮ → **Linked devices** → **Link a device**; on the tablet, install WhatsApp Business and choose
@@ -90,8 +109,7 @@ WhatsApp number, for people who say yes, and for everyone who writes to you firs
    - **Labels**: New lead, Preview sent, Interested, Paid, Not interested.
 5. **Your WhatsApp number in the settings** (it goes into the e-mail signature and your copy of the PDF): type
    `settings` and set `OUTREACH_SENDER_PHONE=+<country code and number>`, save (Ctrl+O, Enter, Ctrl+X).
-6. **Every working day** in office hours (India: 10 AM - 6:30 PM, Monday to Saturday): `whatsapp`, and answer what
-   comes back.
+6. **Every day** in office hours (India: 10 AM - 6:30 PM): `whatsapp`, and answer what comes back.
 
 ## Later: answers by a machine
 

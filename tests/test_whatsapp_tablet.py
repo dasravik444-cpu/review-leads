@@ -89,7 +89,7 @@ def test_the_command_prints_the_next_message_as_one_line_and_waits_for_office_ho
     assert fields == ["2", "k-", "+1 512-555-0101", "-", "Taco Town", "https://wa.me/15125550101?text=Hi"]
     monkeypatch.setattr(lr, "working_hours", lambda: (False, "Monday 02:00"))
     out = (run("list"), capsys.readouterr().out)
-    hours = "10 AM - 6:30 PM, Monday to Saturday" if market == "in" else "about 8 PM - 2 AM India time"
+    hours = "10 AM - 6:30 PM, every day" if market == "in" else "about 8 PM - 2 AM India time"
     assert out[0] == 4 and "outside office hours in" in out[1] and hours in out[1]
     assert run("list", "--now") == 0
     monkeypatch.setattr(lr, "working_hours", lambda: (True, "Monday 11:00"))
@@ -137,3 +137,95 @@ def test_the_tablet_opens_each_chat_in_whatsapp_business_and_saves_what_you_answ
     assert out.returncode == 0 and not (tmp_path / "log").exists()
     out = run("q\n")                                           # stop after looking at the first one
     assert "Stopped" in out.stdout and "mark" not in (tmp_path / "log").read_text()
+
+
+def test_a_test_message_skipped_numbers_and_a_sheet_that_does_not_answer(monkeypatch, capsys):
+    sess, client = queue_sheet([qrow("BLR-00001", "Olive Bistro", "+91 98450 11111"),
+                                qrow("BLR-00002", "Saffron Lounge", "+91 80 4123 4567")], "India WhatsApp Queue")
+    import leadgen.sheets
+
+    monkeypatch.setattr(leadgen.sheets, "SheetsClient", lambda *a, **k: client)
+    monkeypatch.setenv("MARKET", "in")
+    lr = local_run()
+    args = lambda action, **k: type("A", (), {"action": action, "now": True, "skip": [], **k})()  # noqa: E731
+    # a test message to a number typed the Indian way: the Sheet is read, the chat link is made
+    assert lr.cmd_whatsapp(args("test", number="987-654-3210")) == 0
+    out = capsys.readouterr().out.strip().splitlines()
+    assert out[0] == "Google Sheet: connected, 2 messages in the India WhatsApp Queue tab."
+    fields = out[-1].split("\t")
+    assert fields[2] == "+919876543210" and fields[5].startswith("https://wa.me/919876543210?text=Test%20message")
+    assert "running%20and%20synced" in fields[5]
+    assert lr.cmd_whatsapp(args("test", number="12345")) == 2 and "not a phone number" in capsys.readouterr().out
+    # numbers already dealt with this time are passed over, even before the Sheet has their result
+    assert lr.cmd_whatsapp(args("next", skip=["+91 98450 11111"])) == 0
+    assert capsys.readouterr().out.split("\t")[4] == "Saffron Lounge"
+    # the Sheet does not answer: a clear message and exit code 5, no crash
+    from leadgen.outreach import wa_queue
+
+    monkeypatch.setattr(wa_queue, "pending", lambda *a: (_ for _ in ()).throw(ConnectionError("no internet")))
+    assert lr.cmd_whatsapp(args("next")) == 5 and "Nothing is lost" in capsys.readouterr().out
+
+
+ROBUST_STUBS = {
+    "proot-distro": '''echo "$*" | sed 's/.*inside.sh //' >> "$STATE/calls"
+case "$*" in
+  *"whatsapp list"*) echo "WhatsApp Queue: 2 messages to send." ;;
+  *"whatsapp next"*) [ -n "$NEXT_FAIL" ] && { echo "The Google Sheet did not answer"; exit 5; }
+                     n=$(cat "$STATE/n" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$STATE/n"
+                     case $n in
+                       1) printf '3\\tk-1\\t+91 98450 11111\\tBLR-00001\\tOlive Bistro\\thttps://wa.me/919845011111?text=Hi\\n' ;;
+                       2) printf '4\\tk-2\\t+91 80 4123 4567\\tBLR-00002\\tSaffron Lounge\\thttps://wa.me/918041234567?text=Hi\\n' ;;
+                     esac ;;
+  *"whatsapp mark"*) [ -n "$MARK_FAIL_ROW" ] && [[ "$*" == *"whatsapp mark $MARK_FAIL_ROW "* ]] && exit 5
+                     echo "Saved" ;;
+  *"whatsapp test"*) echo "Google Sheet: connected, 2 messages in the India WhatsApp Queue tab."
+                     printf '0\\t-\\t+919876543210\\t-\\tTest message\\thttps://wa.me/919876543210?text=Test\\n' ;;
+esac''',
+    "am": 'echo "am $*" >> "$STATE/calls"; echo "Starting: Intent { act=android.intent.action.VIEW }"',
+    "termux-open-url": 'echo "open-url $*" >> "$STATE/calls"',
+}
+
+
+@pytest.mark.skipif(not shutil.which("bash"), reason="needs bash")
+def test_the_tablet_keeps_going_when_the_sheet_or_a_key_press_goes_wrong(tmp_path):
+    stubs = tmp_path / "stubs"
+    stubs.mkdir()
+    for name, body in ROBUST_STUBS.items():
+        (stubs / name).write_text("#!/bin/bash\n" + body + "\n")
+        (stubs / name).chmod(0o755)
+    env = {**os.environ, "STATE": str(tmp_path), "HOME": str(tmp_path), "WHATSAPP_RETRY_SECONDS": "0",
+           "PATH": f"{stubs}{os.pathsep}{os.environ['PATH']}"}
+
+    def run(*argv, keys="", **extra):
+        (tmp_path / "calls").unlink(missing_ok=True)
+        (tmp_path / "n").unlink(missing_ok=True)
+        out = subprocess.run(["bash", str(ROOT / "android" / "whatsapp.sh"), *argv], input=keys, env={**env, **extra},
+                             capture_output=True, text=True, timeout=60)
+        calls = (tmp_path / "calls").read_text().splitlines() if (tmp_path / "calls").exists() else []
+        return out, calls
+
+    unsaved = tmp_path / ".review-leads" / "whatsapp-unsaved.tsv"
+    # the Sheet does not take the first result: it is kept on the tablet, the next message still comes, and that
+    # first number is not opened again; a wrong key just asks again
+    out, calls = run(keys="\nx\nn\n", MARK_FAIL_ROW="3")
+    assert out.returncode == 0, out.stderr
+    assert "Kept on the tablet" in out.stdout and "Press Enter (sent), n (WhatsApp said" in out.stdout
+    assert "whatsapp next --skip +91 98450 11111" in calls
+    assert "whatsapp mark 4 k-2 +91 80 4123 4567 Not on WhatsApp" in calls
+    assert unsaved.read_text() == "3\tk-1\t+91 98450 11111\tSent\n"            # tried again at the end, still kept
+    assert "Nothing more to send now (1 sent)" in out.stdout and "1 earlier result(s) still waiting" in out.stdout
+    # next time it is saved first, before anything else
+    out, calls = run(keys="q\n")
+    assert calls[0] == "whatsapp mark 3 k-1 +91 98450 11111 Sent" and unsaved.read_text() == ""
+    # the Sheet does not answer at all: three tries, then a clear message - no crash
+    out, calls = run(NEXT_FAIL="1")
+    assert out.returncode == 0 and calls.count("whatsapp next") == 3
+    assert "The WhatsApp Queue could not be read (0 sent so far)" in out.stdout
+    # the test message: opened in WhatsApp Business, and what happened is said plainly
+    out, calls = run("test", "987-654-3210", keys="\n")
+    assert out.returncode == 0 and "Google Sheet: connected, 2 messages" in out.stdout
+    assert "whatsapp test 987-654-3210" in calls
+    assert "am start -a android.intent.action.VIEW -d https://wa.me/919876543210?text=Test -p com.whatsapp.w4b" in calls
+    assert "Test sent: Termux, the Google Sheet and WhatsApp Business work together." in out.stdout
+    out, _ = run("test", "987-654-3210", keys="n\n")
+    assert "is not on WhatsApp: check the number" in out.stdout

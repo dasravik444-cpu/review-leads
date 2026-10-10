@@ -12,6 +12,7 @@
   "price_starter": "$100",
   "price_pro": "$200",
   "markets": {
-    "in": {"price_starter": "₹3,000", "price_pro": "₹8,000", "review_report": true, "reply_to": "message"}
+    "in": {"price_starter": "₹3,000", "price_pro": "₹8,000", "review_report": true, "reply_to": "message",
+           "competitors": "Leading review platforms charge ₹10,000 or more a month."}
   }
 }

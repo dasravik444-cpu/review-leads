@@ -12,3 +12,7 @@ name = "Bengaluru"
 aliases = ["Bangalore", "Indiranagar", "Koramangala", "MG Road", "Whitefield", "HSR Layout"]
 center = [12.9716, 77.5946]
 radius_km = 18
+
+[plan]
+days = 7             # a 7-day campaign: the city's businesses spread over 7 evenings
+daily_target = "auto"

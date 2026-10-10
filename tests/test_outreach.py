@@ -624,3 +624,28 @@ def test_while_email_is_paused_whatsapp_reaches_email_leads_and_they_are_not_ema
     runner(cfg, store, client, clock, smtp).run()
     assert status_of(sess, "key1") == "WhatsApp sent"
     assert [m["To"] for m in smtp.sent] == ["hi@saffroncafe.in"]      # one channel at a time
+
+
+def test_every_phone_number_is_tried_one_at_a_time_until_one_is_on_whatsapp(tmp_path):
+    # India: landlines too (a business may run WhatsApp Business on its landline), after the mobiles
+    leads = [lead(1, "Olive Bistro", phones="+91 80 4123 4567 (landline)\n+91 98450 11111 (mobile)", priority="High"),
+             lead(2, "Saffron Lounge", phones="+91 80 4000 0001 (landline)", priority="High")]
+    sess, client = sheet_with(leads)
+    smtp, clock = SmtpWorld(), Clock(ts(2026, 10, 11, 11))
+    store = OutreachStore(str(tmp_path / "o.sqlite"))
+    cfg = cfg_with()
+    cfg["outreach"]["whatsapp"].update(include_mobiles=True, include_landlines=True, start_per_day=5, max_per_day=5)
+    runner(cfg, store, client, clock, smtp, live=False).run()
+    wa = tab(sess, "WhatsApp Queue")
+    assert [(r["Business"], r["Number"]) for r in wa] == [("Olive Bistro", "+91 98450 11111"),        # mobile first
+                                                          ("Saffron Lounge", "+91 80 4000 0001")]
+    assert wa[1]["Why"].startswith("Phone number (landline")
+    rows = sess.tabs["WhatsApp Queue"]["rows"]
+    col = rows[0].index("Result")
+    rows[1][col] = rows[2][col] = "Not on WhatsApp"                # WhatsApp said so for both
+    clock.t = ts(2026, 10, 11, 12)
+    code, s = runner(cfg, store, client, clock, smtp, live=False).run()
+    assert code == 0
+    # Olive Bistro's other number comes next; Saffron Lounge has no other number: it is left, nothing breaks
+    assert [r["Number"] for r in tab(sess, "WhatsApp Queue")] == ["+91 98450 11111", "+91 80 4000 0001", "+91 80 4123 4567"]
+    assert store.scalar("SELECT COUNT(*) FROM wa WHERE result='not_on_whatsapp'") == 2

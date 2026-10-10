@@ -5,7 +5,8 @@ the customers. It works on India (the default since 10 October 2026: premium caf
 salons and gyms in 16 big cities) or the US (`MARKET=us` in settings.txt).
 
 - **Finds the businesses.**
-  - India: 16 cities from Kolkata, Mumbai and Delhi on, each from its centre outwards; only businesses with their
+  - India: 16 cities, Bengaluru (a 7-day campaign), Kolkata, Chennai, Delhi and Mumbai first, each from its centre
+    outwards: cafés, restaurants, bars, salons and gyms; only businesses with their
     own website or Instagram, no budget eateries, no big chains ([config/in/_base.toml](config/in/_base.toml)).
   - US: 30 cities, a few at a time, on your own computer ([docs/LOCAL.md](docs/LOCAL.md)).
   - For the US

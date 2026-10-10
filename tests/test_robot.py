@@ -235,7 +235,7 @@ def test_india_timetable_emails_in_indian_office_hours_and_lead_jobs_in_the_even
     r = robot(tmp_path, monkeypatch)
     assert r.market({}).code == "in" and r.market({"MARKET": "us"}).code == "us"   # settings.txt wins over the default
     done = {"update": {"last_started": at(IST, 2026, 10, 10, 9, 0)}, "backup": {"last_started": at(IST, 2026, 10, 10, 0, 30)}}
-    # Saturday 10 Oct 2026: e-mails every hour from 10:35 India time (Saturday is a working day in India)
+    # Saturday 10 Oct 2026: e-mails every hour from 10:35 India time (every day in India, Sunday too)
     assert r.pick_due(at(IST, 2026, 10, 10, 10, 30), {"jobs": done}, {}) is None
     assert r.pick_due(at(IST, 2026, 10, 10, 10, 36), {"jobs": done}, {}).name == "emails"
     assert r.pick_due(at(IST, 2026, 10, 10, 10, 36), {"jobs": done}, {"MARKET": "us"}) is None   # US: not now
@@ -243,8 +243,12 @@ def test_india_timetable_emails_in_indian_office_hours_and_lead_jobs_in_the_even
     assert r.pick_due(at(IST, 2026, 10, 10, 18, 50), {"jobs": done}, {}) is None   # the lead search waits for 19:00
     assert r.pick_due(at(IST, 2026, 10, 10, 19, 1), {"jobs": done}, {}).name == "leads"
     timetable = r.jobs({})
-    # no e-mails on Sunday: the next run is Monday 10:35
-    assert r.next_slot(timetable["emails"], at(IST, 2026, 10, 10, 18, 0)) == datetime(2026, 10, 12, 10, 35, tzinfo=IST)
+    # Sunday too: the next run after Saturday evening is Sunday 10:35
+    assert r.next_slot(timetable["emails"], at(IST, 2026, 10, 10, 18, 0)) == datetime(2026, 10, 11, 10, 35, tzinfo=IST)
+    # up to 3 hours of lead search a day in India (it stops sooner once the day's share is done), 1 hour in the US
+    assert r.command(timetable["leads"], {})[0][-4:] == ["--minutes", "180", "--hunt-minutes", "30"]
+    assert r.command(timetable["leads"], {"ROBOT_LEAD_MINUTES": "90"})[1] == 90 + 40 + 20
+    assert r.command(timetable["leads"], {"MARKET": "us"})[0][-3] == "60"
     assert [timetable[j].times[0] for j in ("update", "leads", "hunt", "backup")] == ["09:00", "19:00", "21:30", "00:30"]
 
 
@@ -277,3 +281,18 @@ def test_india_status_counts_india_cities_and_its_own_emails(tmp_path, monkeypat
     assert "E-mails (sending PAUSED in config/in/_base.toml): 1 sent today" in text
     row = next(line for line in text.splitlines() if line.startswith("E-mails "))
     assert row.endswith("Sat 10 Oct 11:35 - sending PAUSED, reads replies only")
+
+
+def test_status_shows_the_city_campaign_under_way(tmp_path, monkeypatch):
+    monkeypatch.setenv("MARKET", "in")
+    r = robot(tmp_path, monkeypatch)
+    from test_local_run import campaign_db
+
+    (tmp_path / "data").mkdir()
+    now = datetime(2026, 10, 12, 20, 0, tzinfo=IST).timestamp()
+    campaign_db(tmp_path / "data" / "bengaluru.sqlite", "2026-10-10", open_searches=60, done_searches=40, mapped=1234)
+    monkeypatch.setattr(r, "email_settings", lambda *_: {"enabled": True})
+    r.save_status({"scheduler": {"heartbeat": now}})
+    text = r.status_text(now)
+    assert ("Lead campaign under way (the robot stays on it every evening until it is finished):\n"
+            "  bengaluru: day 3 of 7, 40% of the city searched, 1,234 businesses of these kinds on the map (open data)") in text

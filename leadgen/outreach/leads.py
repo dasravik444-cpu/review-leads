@@ -83,6 +83,11 @@ class Lead:
         first = name.split(" ")[0].strip(" ,.") if name else ""
         return first if first.isalpha() and len(first) > 1 else ""
 
+    def other_phones(self) -> list[str]:
+        """The phone numbers that are not mobiles (landlines, or of unknown kind)."""
+        mobiles = set(self.mobiles())
+        return [e164 for e164, _ in self.phones if e164 not in mobiles]
+
     def mobiles(self) -> list[str]:
         """Phone numbers that are mobiles (WhatsApp is only likely on these)."""
         out = []

@@ -19,8 +19,9 @@ language = "en"
 region = "in"
 
 [plan]
-days = 10
-daily_target = "auto"
+# A city's campaign: about 1,000 businesses a day, as many days as the city needs (Bengaluru: 7 days, its own file).
+days = "auto"
+daily_target = 1000
 order = "center_out"
 min_cell_km = 1.0
 max_cell_km = 6.0
@@ -121,15 +122,15 @@ website = ""
 notify_email = ""
 
 [outreach.email]
-# Ready, but PAUSED until the India e-mail and PDF are approved (the robot reads replies; it sends nothing).
-enabled = false
+# On since 11 October 2026. Every day: restaurants, cafés, salons and gyms are open on Sundays too.
+enabled = true
 start_per_day = 15
 step = 5
 step_every_days = 3
 max_per_day = 40
 window_start = "10:30"
 window_end = "18:30"
-days = ["mon", "tue", "wed", "thu", "fri", "sat"]
+days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 follow_up_days = [3, 7]
 footer = """{sender_business}
 WhatsApp: {sender_phone}
@@ -138,12 +139,19 @@ Not interested? Reply "no" and we won't e-mail again."""
 
 [outreach.whatsapp]
 # Indian businesses live on WhatsApp: their mobile numbers are queued too (one by one, by hand: docs/WHATSAPP.md).
-# A new number starts small and grows with the days you actually send, so it is not reported and banned.
+# A new number starts small and grows with the days you actually send, so it is not reported and banned:
+# 10 on the first day, 5 more after each day you sent, up to 40.
+# Every phone number counts: a business's WhatsApp number first, then its mobiles, then its other numbers, one at a
+# time; when you mark one "Not on WhatsApp", its next number is queued.
 start_per_day = 10
 step = 5
-step_every_days = 5
+step_every_days = 1
 max_per_day = 40
 include_mobiles = true
+include_landlines = true
 
-# Restaurants, cafés, bars, bakeries, salons and gyms are on by default (config/shared/categories.toml); the
-# rest stays off for the premium focus.
+# Your list (11 October 2026): cafés, restaurants, bars, salons and gyms (config/shared/categories.toml has them on;
+# bakeries are switched off here, the other kinds are off there).
+[[categories]]
+key = "bakery"
+enabled = false

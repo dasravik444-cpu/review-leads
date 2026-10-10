@@ -23,6 +23,7 @@ REASONS = {
     "opted_in": "Replied 'yes' to our e-mail - send the free preview",
     "listed": "Publishes this number as WhatsApp",
     "mobile": "Mobile number (not confirmed on WhatsApp)",
+    "phone": "Phone number (landline or unknown: try it, many are not on WhatsApp)",
 }
 
 

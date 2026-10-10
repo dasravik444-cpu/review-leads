@@ -1,18 +1,18 @@
-# The Indian cities, in the order they are searched (the robot takes the next one each day; ROBOT_CITIES_PER_DAY
-# in settings.txt for more). Put "#" in front of a line to pause a city. New cities: add them to
-# scripts/make_in_cities.py and run it.
+# The Indian cities, in the order they are searched. The robot stays on a city every evening until its campaign is
+# finished (Bengaluru: 7 days; the others about 1,000 businesses a day), then takes the next one. Put "#" in front
+# of a line to pause a city. New cities: add them to scripts/make_in_cities.py and run it.
 #
-# Kolkata first: your home city, where a visit in person is possible.
+# Your order (11 October 2026): Bengaluru, Kolkata, Chennai, Delhi, Mumbai; then the rest.
 searched_on_github = []
 cities = [
-  "kolkata",
-  "mumbai",
-  "delhi",
   "bengaluru",
-  "gurugram",
+  "kolkata",
+  "chennai",
+  "delhi",
+  "mumbai",
   "hyderabad",
   "pune",
-  "chennai",
+  "gurugram",
   "noida",
   "ahmedabad",
   "chandigarh",

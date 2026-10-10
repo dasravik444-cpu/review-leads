@@ -37,6 +37,9 @@ CITIES = [
     ("indore", "Indore", ["Vijay Nagar", "Palasia"], (22.7196, 75.8577), 10, "IDR"),
 ]
 
+# Cities whose campaign has a fixed number of days (the others: about 1,000 businesses a day, _base.toml [plan]).
+PLAN_DAYS = {"bengaluru": 7}
+
 TEMPLATE = """# {name} - one city of the India campaign (config/in/fleet.toml). Shared settings: _base.toml.
 # Made by scripts/make_in_cities.py - edit the list there and run it again.
 include = ["../shared/categories.toml", "_base.toml"]
@@ -51,6 +54,12 @@ name = "{name}"
 aliases = [{aliases}]
 center = [{lat}, {lng}]
 radius_km = {radius}
+{plan}"""
+
+PLAN = """
+[plan]
+days = {days}             # a {days}-day campaign: the city's businesses spread over {days} evenings
+daily_target = "auto"
 """
 
 
@@ -60,7 +69,8 @@ def main() -> None:
     for slug, name, aliases, (lat, lng), radius, prefix in CITIES:
         (out / f"{slug}.toml").write_text(TEMPLATE.format(
             name=name, slug=slug, prefix=prefix, aliases=", ".join(f'"{a}"' for a in aliases),
-            lat=lat, lng=lng, radius=radius), encoding="utf-8")
+            lat=lat, lng=lng, radius=radius, plan=PLAN.format(days=PLAN_DAYS[slug]) if slug in PLAN_DAYS else ""),
+            encoding="utf-8")
     print(f"wrote {len(CITIES)} city files to {out}")
 
 

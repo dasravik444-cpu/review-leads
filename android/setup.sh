@@ -8,11 +8,12 @@
 #   settings  open your settings (settings.txt) to fill in
 #   check     test the Google Sheet and Gmail
 #   leads     find businesses in the next cities (India, or the US with MARKET=us) and their e-mail addresses
-#   emails    send today's e-mails (office hours; India: 10 AM - 6:30 PM, Monday to Saturday)
+#   emails    send today's e-mails (office hours; India: 10 AM - 6:30 PM, every day)
 #   import    lead lists from GitHub (leads-<city>.zip) and your PDF, from your Download folder
 #   update    get the newest version of the robot
 #   robot     on | off | status | log: the robot that finds leads and sends e-mails by itself (android/robot.sh)
-#   whatsapp  today's WhatsApp messages, one tap each in WhatsApp Business (android/whatsapp.sh)
+#   whatsapp  today's WhatsApp messages, one tap each in WhatsApp Business (android/whatsapp.sh);
+#             whatsapp test NUMBER  sends a test message first
 # If it stops halfway (a network hiccup), paste the line again: it carries on from where it stopped.
 # Other systems in Termux (Plant Parlour) are not touched: when proot-distro already works it is left as it is, the
 # robot has its own Ubuntu, and Termux's keep-awake lock is never released here.

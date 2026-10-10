@@ -10,17 +10,19 @@ unless it says MARKET=us; leadgen/market.py), so the lead jobs move out of their
                        India market                         US market
     update             09:00                                11:00      the newest version (kept only when it starts
                                                                        cleanly, else the old one stays)
-    emails             10:35 ... 17:35 Monday to Saturday   09:35 ... 15:35 Chicago time, Monday to Friday
+    emails             10:35 ... 17:35 every day            09:35 ... 15:35 Chicago time, Monday to Friday
                                                                        (about 8 PM to 2 AM India time)
-    leads              19:00                                13:00      the next city: an hour of search, then 30
-                                                                       minutes of e-mail hunt
+    leads              19:00 (up to 3 hours)                13:00      the city whose campaign is under way (else the
+                                                                       next one), then 30 minutes of e-mail hunt
     hunt               21:30                                17:30      an hour of e-mail hunt for businesses of
                                                                        earlier cities that still have no e-mail
     backup             00:30                                00:30      the robot's memory into the tablet's
                                                                        Documents folder (the last 7 kept)
 One job at a time; a slot missed while the tablet was off runs as soon as the robot is back the same day.
-Settings (settings.txt, all optional): MARKET (in), ROBOT_CITIES_PER_DAY (1), ROBOT_LEADS, ROBOT_EMAILS,
-ROBOT_AUTO_UPDATE (yes/no).
+The lead search stays on a city until its campaign is finished (Bengaluru: 7 days), for up to ROBOT_LEAD_MINUTES a
+day (India 180, US 60; it stops sooner when the day's share of the city is done).
+Settings (settings.txt, all optional): MARKET (in), ROBOT_CITIES_PER_DAY (1), ROBOT_LEAD_MINUTES, ROBOT_LEADS,
+ROBOT_EMAILS, ROBOT_AUTO_UPDATE (yes/no).
 Plant Parlour has its own robot with its own times; nothing here touches it.
 """
 from __future__ import annotations
@@ -70,6 +72,9 @@ class Job:
     switch: str = ""                                 # a settings key; "no" there switches the job off
 
 
+# Lead search time per city and day (minutes), unless ROBOT_LEAD_MINUTES says otherwise: India aims at about 1,000
+# businesses a day (the run stops sooner once the day's share is done).
+LEAD_MINUTES = {"in": 180, "us": 60}
 # The lead jobs' times (India time), out of the way of the market's e-mail hours.
 LEAD_TIMES = {"in": {"update": "09:00", "leads": "19:00", "hunt": "21:30", "backup": "00:30"},
               "us": {"update": "11:00", "leads": "13:00", "hunt": "17:30", "backup": "00:30"}}
@@ -151,13 +156,21 @@ def cities_per_day(settings: dict) -> int:
         return 1
 
 
+def lead_minutes(settings: dict) -> int:
+    try:
+        return max(15, min(600, int(str(settings.get("ROBOT_LEAD_MINUTES", "")).strip())))
+    except ValueError:
+        return LEAD_MINUTES[market(settings).code]
+
+
 def command(job: Job, settings: dict) -> tuple[list[str], float]:
     """What a job runs (through scripts/run.sh, which also installs a new requirement after an update) and its time
     limit in minutes."""
     run = ["bash", "scripts/run.sh"]
     if job.name == "leads":
-        n = cities_per_day(settings)
-        return run + ["leads", "--count", str(n), "--minutes", "60", "--hunt-minutes", "30"], n * 100 + 20
+        n, minutes = cities_per_day(settings), lead_minutes(settings)
+        return (run + ["leads", "--count", str(n), "--minutes", str(minutes), "--hunt-minutes", "30"],
+                n * (minutes + 40) + 20)
     if job.name == "hunt":
         return run + ["hunt", "--minutes", "60"], job.timeout_min
     if job.name == "emails":
@@ -433,6 +446,20 @@ def lead_counts(m: markets.Market | None = None) -> list[tuple[str, int, int, in
     return out
 
 
+def campaign_lines(m: markets.Market, now: float) -> list[str]:
+    """The cities whose campaign is under way: which day, how much of the city is searched, how many businesses."""
+    from leadgen.progress import city_progress
+
+    today = datetime.fromtimestamp(now, INDIA).date()
+    out = []
+    for city in market_cities(m):
+        state = city_progress(DATA / f"{city}.sqlite", today)
+        if state and state["unfinished"]:
+            out.append(f"  {city}: day {state['day']} of {state['days']}, {state['searched_pct']}% of the city searched, "
+                       f"{state['mapped']:,} businesses of these kinds on the map (open data)")
+    return ["", "Lead campaign under way (the robot stays on it every evening until it is finished):"] + out if out else []
+
+
 def email_counts(now: float, m: markets.Market | None = None) -> dict:
     m = m or markets.MARKETS["us"]
     db = DATA / m.outreach_db
@@ -569,6 +596,7 @@ def status_text(now: float | None = None) -> str:
                 problems.append(f"  {job.title} ({fmt(rec.get('last_started'))}): {why}")
     if problems:
         lines += ["", "Why it failed (robot log shows more):"] + problems
+    lines += campaign_lines(m, now)
     counts = lead_counts(m)
     if counts:
         lines += ["", f"Leads found on this tablet in {m.name} (businesses, and how many have each contact):",

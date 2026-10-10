@@ -600,7 +600,7 @@ feedback form, on WhatsApp and e-mail, and follow up for you.</div>
 </ol></div></div>
 {report_section() if reports else ""}
 <div class="sec"><div class="row"><h2>One-time price. No monthly fees.</h2>
-<div class="sub nowrap">Leading review platforms start at $299–$399 a month.</div></div>
+<div class="sub nowrap">{esc(d.get("competitors") or "Leading review platforms start at $299–$399 a month.")}</div></div>
 <div class="prices">
 <div class="price"><h4>Starter</h4><div class="for">More reviews from the customers in front of you</div>
 <div class="amt">{esc(starter)}<small>one-time</small></div><ul>
