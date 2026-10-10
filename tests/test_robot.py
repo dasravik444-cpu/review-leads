@@ -230,26 +230,32 @@ def test_status_says_why_a_job_failed_from_that_days_log(tmp_path, monkeypatch):
     assert r.why_failed(["all fine"]) == ""
 
 
-def test_india_timetable_emails_in_indian_office_hours_and_lead_jobs_in_the_evening(tmp_path, monkeypatch):
+def test_india_timetable_lead_search_at_night_and_emails_from_7_am(tmp_path, monkeypatch):
     monkeypatch.setenv("MARKET", "in")
     r = robot(tmp_path, monkeypatch)
     assert r.market({}).code == "in" and r.market({"MARKET": "us"}).code == "us"   # settings.txt wins over the default
-    done = {"update": {"last_started": at(IST, 2026, 10, 10, 9, 0)}, "backup": {"last_started": at(IST, 2026, 10, 10, 0, 30)}}
-    # Saturday 10 Oct 2026: e-mails every hour from 10:35 India time (every day in India, Sunday too)
-    assert r.pick_due(at(IST, 2026, 10, 10, 10, 30), {"jobs": done}, {}) is None
-    assert r.pick_due(at(IST, 2026, 10, 10, 10, 36), {"jobs": done}, {}).name == "emails"
-    assert r.pick_due(at(IST, 2026, 10, 10, 10, 36), {"jobs": done}, {"MARKET": "us"}) is None   # US: not now
-    done["emails"] = {"last_started": at(IST, 2026, 10, 10, 17, 35)}
-    assert r.pick_due(at(IST, 2026, 10, 10, 18, 50), {"jobs": done}, {}) is None   # the lead search waits for 19:00
-    assert r.pick_due(at(IST, 2026, 10, 10, 19, 1), {"jobs": done}, {}).name == "leads"
+    # Sunday 11 Oct 2026: the backup at 00:30, the lead search at 01:00, then the e-mail hunt at 04:30
+    done = {"backup": {"last_started": at(IST, 2026, 10, 11, 0, 30)}}
+    assert r.pick_due(at(IST, 2026, 10, 11, 0, 50), {"jobs": done}, {}) is None
+    assert r.pick_due(at(IST, 2026, 10, 11, 1, 0, 30), {"jobs": done}, {}).name == "leads"
+    done["leads"] = {"last_started": at(IST, 2026, 10, 11, 1, 0)}
+    assert r.pick_due(at(IST, 2026, 10, 11, 4, 31), {"jobs": done}, {}).name == "hunt"
+    done["hunt"] = {"last_started": at(IST, 2026, 10, 11, 4, 31)}
+    # the update at 06:30, then e-mails every hour from 07:05 (every day in India, Sunday too)
+    assert r.pick_due(at(IST, 2026, 10, 11, 6, 31), {"jobs": done}, {}).name == "update"
+    done["update"] = {"last_started": at(IST, 2026, 10, 11, 6, 31)}
+    assert r.pick_due(at(IST, 2026, 10, 11, 7, 0), {"jobs": done}, {}) is None
+    assert r.pick_due(at(IST, 2026, 10, 11, 7, 6), {"jobs": done}, {}).name == "emails"
+    assert r.pick_due(at(IST, 2026, 10, 11, 7, 6), {"jobs": done}, {"MARKET": "us"}) is None   # US: not now
     timetable = r.jobs({})
-    # Sunday too: the next run after Saturday evening is Sunday 10:35
-    assert r.next_slot(timetable["emails"], at(IST, 2026, 10, 10, 18, 0)) == datetime(2026, 10, 11, 10, 35, tzinfo=IST)
+    assert timetable["emails"].times == tuple(f"{h:02d}:05" for h in range(7, 19))
+    # the next run after the evening's last one: tomorrow 07:05
+    assert r.next_slot(timetable["emails"], at(IST, 2026, 10, 11, 18, 30)) == datetime(2026, 10, 12, 7, 5, tzinfo=IST)
     # up to 3 hours of lead search a day in India (it stops sooner once the day's share is done), 1 hour in the US
     assert r.command(timetable["leads"], {})[0][-4:] == ["--minutes", "180", "--hunt-minutes", "30"]
     assert r.command(timetable["leads"], {"ROBOT_LEAD_MINUTES": "90"})[1] == 90 + 40 + 20
     assert r.command(timetable["leads"], {"MARKET": "us"})[0][-3] == "60"
-    assert [timetable[j].times[0] for j in ("update", "leads", "hunt", "backup")] == ["09:00", "19:00", "21:30", "00:30"]
+    assert [timetable[j].times[0] for j in ("update", "leads", "hunt", "backup")] == ["06:30", "01:00", "04:30", "00:30"]
 
 
 def test_india_status_counts_india_cities_and_its_own_emails(tmp_path, monkeypatch):
@@ -280,7 +286,7 @@ def test_india_status_counts_india_cities_and_its_own_emails(tmp_path, monkeypat
     assert cities == ["kolkata"]
     assert "E-mails (sending PAUSED in config/in/_base.toml): 1 sent today" in text
     row = next(line for line in text.splitlines() if line.startswith("E-mails "))
-    assert row.endswith("Sat 10 Oct 11:35 - sending PAUSED, reads replies only")
+    assert row.endswith("Sat 10 Oct 11:05 - sending PAUSED, reads replies only")
 
 
 def test_status_shows_the_city_campaign_under_way(tmp_path, monkeypatch):

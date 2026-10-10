@@ -63,10 +63,10 @@ unless `settings` says `MARKET=us`; each market has its own cities, its own tabs
 
 | When (India time) | India (the default) | US (`MARKET=us`) |
 |---|---|---|
-| newest version (kept only if it starts cleanly) | 09:00 | 11:00 |
-| e-mails: first e-mails with the PDF, follow-ups, replies and bounces; fills the WhatsApp Queue | every hour 10:35 - 17:35, every day | every hour 09:35 - 15:35 Chicago time, Monday to Friday (20:05 - 02:05 India time; from 1 November 21:05 - 03:05) |
-| lead search: the city whose campaign is under way (else the next one), then 30 minutes of e-mail hunt (Austin gave 2,171 businesses) | 19:00, up to 3 hours (about 1,000 businesses a day; it stops sooner when the day's share is done) | 13:00, 1 hour |
-| an hour more of e-mail hunt for businesses of earlier cities that still have no e-mail | 21:30 | 17:30 |
+| newest version (kept only if it starts cleanly) | 06:30 | 11:00 |
+| e-mails: first e-mails with the PDF, follow-ups, replies and bounces; fills the WhatsApp Queue | every hour 07:05 - 18:05, every day | every hour 09:35 - 15:35 Chicago time, Monday to Friday (20:05 - 02:05 India time; from 1 November 21:05 - 03:05) |
+| lead search: the city whose campaign is under way (else the next one), then 30 minutes of e-mail hunt (Austin gave 2,171 businesses) | 01:00 (at night, so the new leads are in the Sheet before the 7 AM e-mails), up to 3 hours (about 1,000 businesses a day; it stops sooner when the day's share is done) | 13:00, 1 hour |
+| an hour more of e-mail hunt for businesses of earlier cities that still have no e-mail | 04:30 | 17:30 |
 | a backup of its memory into the tablet's Documents folder (`review-leads-backup`, last 7 days) | 00:30 | 00:30 |
 
 India: a business goes into the Sheet with an e-mail, WhatsApp or phone number **and** its own website or Instagram
@@ -91,7 +91,7 @@ its e-mail): the robot then sends nothing, follow-ups included, but still reads 
 and bounces, and `robot status` says **sending PAUSED**.
 
 **By hand instead:** `leads` finds businesses (3 cities, about 4½ hours; `leads --count 1` one city), `emails` sends
-this hour's share of the day's e-mails in office hours (India: **10 AM - 6:30 PM, every day**; US: about
+this hour's share of the day's e-mails in office hours (India: **7 AM - 6:30 PM, every day**; US: about
 **8 PM - 3 AM India time** on US working days). A command typed
 while the robot is on a job says so (`Busy: e-mail sending (the robot, since 22:09 India time)`): try again later.
 `import` instead waits for that job to finish and then runs by itself. `whatsapp` goes through today's WhatsApp
@@ -126,7 +126,7 @@ not deliver it.
 This robot never changes Termux's shared parts once they work (proot-distro, the package lists), never releases the
 keep-awake lock Plant Parlour holds, and keeps its memory use for the map data under 2 GB. Its robot uses its own
 start-up file (`~/.termux/boot/review-leads`), folder (`~/.review-leads`) and 15-minute check (job 7711; Plant
-Parlour's is 4711), and its lead search starts at 19:00 (India) or 13:00 (US), after Plant Parlour's 06:00 lead run.
+Parlour's is 4711), and its lead search starts at 01:00 (India) or 13:00 (US); Plant Parlour's lead run is at 06:00.
 
 ## One-time setup (Windows, about 20 minutes)
 

@@ -75,7 +75,9 @@ DEFAULTS: dict = {
                   "subjects": [], "first": "", "follow_ups": [], "footer": "", "attachment": ""},
         "whatsapp": {"enabled": True, "start_per_day": 20, "step": 10, "step_every_days": 3, "max_per_day": 50,
                      # include_landlines: also try the other phone numbers (after the mobiles), one at a time
-                     "include_mobiles": True, "include_landlines": False, "message": "", "opted_in_message": ""},
+                     # same_as_email: the first e-mail's words (with "footer", default: reply STOP to stop)
+                     "include_mobiles": True, "include_landlines": False, "message": "", "opted_in_message": "",
+                     "same_as_email": False, "footer": ""},
         # Postal letters (the first contact where cold e-mail is not allowed, e.g. Germany): a daily "Letters"
         # tab of addressed, personalised letters to print or hand to an online letter service.
         "letters": {"enabled": "auto", "per_day": 20, "text": ""},
@@ -283,7 +285,8 @@ def _outreach_errors(o: dict) -> list[str]:
 
     texts = [("email.subjects", s) for s in e.get("subjects") or []] + [("email.first", e.get("first") or "")]
     texts += [("email.follow_ups", s) for s in e.get("follow_ups") or []] + [("email.footer", e.get("footer") or "")]
-    texts += [("whatsapp.message", w.get("message") or ""), ("whatsapp.opted_in_message", w.get("opted_in_message") or "")]
+    texts += [("whatsapp.message", w.get("message") or ""), ("whatsapp.opted_in_message", w.get("opted_in_message") or ""),
+              ("whatsapp.footer", w.get("footer") or "")]
     lt = o.get("letters") or {}
     texts += [("letters.text", lt.get("text") or ""), ("offer", o.get("offer") or "")]
     if lt.get("enabled", "auto") not in ("auto", True, False):

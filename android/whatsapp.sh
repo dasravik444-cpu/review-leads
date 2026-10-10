@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 # Today's WhatsApp messages on the tablet (the command  whatsapp , made by android/setup.sh):
 #   whatsapp              one message after the other: the chat opens in WhatsApp Business with the message already
-#                         typed, you press Send there, come back to Termux and say how it went (saved in the Sheet)
+#                         typed, you press Send there, come back to Termux and say how it went (saved in the Sheet);
+#                         then the same chat opens with the PDF ready, and you press Send again
 #   whatsapp list         only show what is waiting
-#   whatsapp --now        also outside office hours (India: 10 AM - 6:30 PM, every day)
-#   whatsapp test NUMBER  a test message to one number (e.g. your own): checks the Sheet, Termux and WhatsApp Business
+#   whatsapp --now        also outside office hours (India: 7 AM - 6:30 PM, every day)
+#   whatsapp --no-pdf     the messages without the PDF
+#   whatsapp test NUMBER  a test message and the PDF to one number (e.g. your own): checks the Sheet, Termux and
+#                         WhatsApp Business
 # Nothing is sent by a machine: WhatsApp's terms forbid automated and bulk messages and it bans numbers that send
 # them. The robot fills the WhatsApp Queue tab with a few messages a day (more as the number gets older); every
 # phone number of a business is tried, one at a time. docs/WHATSAPP.md explains it all.
@@ -19,6 +22,10 @@ KEEP="$HOME/.review-leads"
 UNSAVED="$KEEP/whatsapp-unsaved.tsv"                # results the Sheet did not take yet: row, key, number, result
 TEMPORARY=5                                         # local_run's exit code: the Sheet or the internet, try again later
 RETRY="${WHATSAPP_RETRY_SECONDS:-15}"               # wait between tries when the Sheet does not answer
+SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+HOST_DIR="$(dirname "$(dirname "$SELF")")"          # the robot's folder, seen from Termux
+SHARE="$KEEP/share"                                 # the PDF, under the name the businesses see
+PDF=""
 
 inside() { proot-distro login "$NAME" -- bash "$DIR/android/inside.sh" "$@" </dev/null; }   # the keyboard stays here
 
@@ -32,6 +39,68 @@ open_chat() {
   fi
   echo "   (Opened with Android's app for WhatsApp links: check it is WhatsApp Business, not your personal WhatsApp.)"
   termux-open-url "$1" 2>/dev/null
+}
+
+# The PDF for the chats: the same one the e-mails carry (your own copy once  import  took it), copied under the
+# name the business sees.
+prepare_pdf() {
+  local out rel name
+  out="$(inside whatsapp pdf 2>&1 | tail -n 1)"
+  IFS=$'\t' read -r rel name <<< "$out"
+  if [ -z "$name" ] || [ ! -f "$HOST_DIR/$rel" ]; then
+    echo "(No PDF this time${out:+: $out})"
+    return 0
+  fi
+  mkdir -p "$SHARE" && cp "$HOST_DIR/$rel" "$SHARE/$name" && PDF="$SHARE/$name"
+  allow_sharing
+}
+
+# WhatsApp reads the PDF through Termux's file sharing, which Termux allows only with allow-external-apps in
+# ~/.termux/termux.properties (shared with Plant Parlour: this one line is added once, nothing else is changed).
+allow_sharing() {
+  local props="$HOME/.termux/termux.properties"
+  grep -Eq '^[[:space:]]*allow-external-apps[[:space:]]*=[[:space:]]*true' "$props" 2>/dev/null && return 0
+  mkdir -p "$HOME/.termux"
+  printf '\n# review-leads: WhatsApp Business may read the PDF the  whatsapp  command shares\nallow-external-apps = true\n' >> "$props"
+  command -v termux-reload-settings >/dev/null 2>&1 && termux-reload-settings >/dev/null 2>&1
+  return 0
+}
+
+# Android's share menu with the PDF: WhatsApp Business, then the business's chat (at the top: it was just written to).
+share_menu() {
+  echo "   (Share menu: choose WhatsApp Business, then the business's chat at the top of the list.)"
+  if command -v termux-share >/dev/null 2>&1 && termux-share -a send -c application/pdf "$PDF" >/dev/null 2>&1; then
+    return 0
+  fi
+  termux-open --send --content-type application/pdf "$PDF" >/dev/null 2>&1
+}
+
+# The PDF straight into the chat of this number in WhatsApp Business (the share menu if Android refuses).
+send_pdf() {
+  local digits="${1//[!0-9]/}" out
+  out="$(am start -a android.intent.action.SEND -t application/pdf --grant-read-uri-permission \
+           --eu android.intent.extra.STREAM "content://com.termux.files$PDF" \
+           --es jid "$digits@s.whatsapp.net" -p "$W4B" 2>&1)"
+  case "$out" in *rror*|*xception*|*"Unable"*) share_menu ;; esac
+  return 0
+}
+
+# After a message went out: the PDF into the same chat.
+pdf_step() {
+  [ -n "$PDF" ] || return 0
+  echo "   Now the PDF: WhatsApp Business opens this chat with the PDF ready - press Send, then come back here."
+  echo "   (If WhatsApp shows a list of chats instead, tap this business at the top.)"
+  send_pdf "$1"
+  local answer
+  while true; do
+    read -r -p "   [Enter] PDF sent   r = open the share menu instead   s = no PDF this time: " answer || answer=s
+    case "$answer" in
+      "")  pdfs=$((pdfs + 1)); return 0 ;;
+      r|R) share_menu ;;
+      s|S) return 0 ;;
+      *)   echo "   Press Enter (PDF sent), r (share menu) or s (no PDF for this one)." ;;
+    esac
+  done
 }
 
 # Save one result in the Sheet; when the Sheet cannot be reached it is kept on the tablet for the next time.
@@ -84,11 +153,19 @@ stopped() { echo; echo "Stopped. The rest stays in the list for next time."; sav
 trap stopped INT
 
 now=""
+pdfs=0
+with_pdf=1
+args=()
+for a in "$@"; do
+  case "$a" in --no-pdf) with_pdf="" ;; *) args+=("$a") ;; esac
+done
+set -- "${args[@]}"
 case "${1:-}" in
   list) shift; inside whatsapp list "$@"; exit $? ;;
   test)
     shift
     [ -n "${1:-}" ] || { echo "usage: whatsapp test NUMBER   (for example: whatsapp test 98765 43210)"; exit 2; }
+    [ -n "$with_pdf" ] && prepare_pdf
     out="$(inside whatsapp test "$*")"; code=$?
     line="$(printf '%s\n' "$out" | tail -n 1)"
     IFS=$'\t' read -r _ _ number _ _ link <<< "$line"
@@ -101,15 +178,16 @@ case "${1:-}" in
     open_chat "$link" || { echo "Could not open WhatsApp Business: is it installed on this tablet?"; exit 1; }
     echo "   WhatsApp Business opens with the test message typed: press Send there, then come back here."
     ask
+    [ "$result" = "Sent" ] && pdf_step "$number"
     case "$result" in
-      Sent) echo "Test sent: Termux, the Google Sheet and WhatsApp Business work together." ;;
+      Sent) echo "Test sent: Termux, the Google Sheet and WhatsApp Business work together$([ "$pdfs" = 1 ] && echo ", the PDF too")." ;;
       "Not on WhatsApp") echo "WhatsApp says $number is not on WhatsApp: check the number and try again." ;;
       *) echo "No test sent." ;;
     esac
     exit 0 ;;
   --now) now="--now" ;;
   "")    ;;
-  *)     echo "usage: whatsapp [list | test NUMBER] [--now]"; exit 2 ;;
+  *)     echo "usage: whatsapp [list | test NUMBER] [--now] [--no-pdf]"; exit 2 ;;
 esac
 
 save_unsaved
@@ -120,6 +198,7 @@ if [ "$code" != 0 ]; then
   echo "The WhatsApp Queue could not be read just now (no internet, or Google did not answer). Try  whatsapp  again in a minute."
   exit 0
 fi
+[ -n "$with_pdf" ] && prepare_pdf
 
 sent=0
 handled=()                                          # numbers dealt with this time: never opened twice
@@ -137,7 +216,7 @@ while true; do
     break
   fi
   IFS=$'\t' read -r row key number lead business link <<< "$line"
-  case "$row" in ''|*[!0-9]*) echo; echo "Nothing more to send now ($sent sent). The robot adds new ones every day."; break ;; esac
+  case "$row" in ''|*[!0-9]*) echo; echo "Nothing more to send now ($sent sent, $pdfs with the PDF). The robot adds new ones every day."; break ;; esac
   handled+=("$number")
   case "$link" in https://wa.me/*) ;; *) echo "   (That message has no chat link - skipped.)"; continue ;; esac
   echo
@@ -150,8 +229,8 @@ while true; do
   echo "   If WhatsApp says the number is not on WhatsApp, press n: the business's next number comes later."
   ask
   [ -n "$result" ] || stopped
-  [ "$result" = "Sent" ] && sent=$((sent + 1))
   save "$row" "$key" "$number" "$result"
+  [ "$result" = "Sent" ] && { sent=$((sent + 1)); pdf_step "$number"; }
 done
 save_unsaved
 exit 0

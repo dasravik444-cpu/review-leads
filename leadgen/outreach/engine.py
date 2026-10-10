@@ -646,8 +646,16 @@ class Outreach:
         w = self.o["whatsapp"]
         ctx = T.context(lead, self.o, self.lang)
         tx = T.texts(self.lang)
-        tpl = (w.get("opted_in_message") or tx["whatsapp_opted_in"]) if reason == "opted_in" else (w.get("message") or tx["whatsapp_cold"])
-        text = T.render(tpl, ctx)
+        if reason == "opted_in":
+            text = T.render(w.get("opted_in_message") or tx["whatsapp_opted_in"], ctx)
+        elif w.get("same_as_email"):
+            # The first e-mail's words, the business's name in them; the PDF follows in the chat (android/whatsapp.sh)
+            # and the ending says how to stop the messages.
+            ctx["attachment_note"] = tx.get("attachment_note", "")
+            ctx["footer"] = T.render(w.get("footer") or tx.get("whatsapp_footer") or "{sender_business}", ctx)
+            text = T.render(self.o["email"].get("first") or tx["first"], ctx)
+        else:
+            text = T.render(w.get("message") or tx["whatsapp_cold"], ctx)
         return [self._today(), lead.lead_id, lead.business, lead.category_label, lead.area, display_phone(phone),
                 REASONS[reason], text, wa_link(phone, text), "", lead.key]
 

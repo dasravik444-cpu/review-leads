@@ -8,13 +8,13 @@
 Timetable, India time. E-mails go out when the businesses of the market are open (MARKET in settings.txt, India
 unless it says MARKET=us; leadgen/market.py), so the lead jobs move out of their way:
                        India market                         US market
-    update             09:00                                11:00      the newest version (kept only when it starts
+    update             06:30                                11:00      the newest version (kept only when it starts
                                                                        cleanly, else the old one stays)
-    emails             10:35 ... 17:35 every day            09:35 ... 15:35 Chicago time, Monday to Friday
+    emails             07:05 ... 18:05 every day            09:35 ... 15:35 Chicago time, Monday to Friday
                                                                        (about 8 PM to 2 AM India time)
-    leads              19:00 (up to 3 hours)                13:00      the city whose campaign is under way (else the
+    leads              01:00 (up to 3 hours)                13:00      the city whose campaign is under way (else the
                                                                        next one), then 30 minutes of e-mail hunt
-    hunt               21:30                                17:30      an hour of e-mail hunt for businesses of
+    hunt               04:30                                17:30      an hour of e-mail hunt for businesses of
                                                                        earlier cities that still have no e-mail
     backup             00:30                                00:30      the robot's memory into the tablet's
                                                                        Documents folder (the last 7 kept)
@@ -76,7 +76,9 @@ class Job:
 # businesses a day (the run stops sooner once the day's share is done).
 LEAD_MINUTES = {"in": 180, "us": 60}
 # The lead jobs' times (India time), out of the way of the market's e-mail hours.
-LEAD_TIMES = {"in": {"update": "09:00", "leads": "19:00", "hunt": "21:30", "backup": "00:30"},
+# India: the lead search at night (01:00, up to about 3 hours, then the e-mail hunt), so new leads are in the Sheet
+# before the first e-mails at 07:05.
+LEAD_TIMES = {"in": {"update": "06:30", "leads": "01:00", "hunt": "04:30", "backup": "00:30"},
               "us": {"update": "11:00", "leads": "13:00", "hunt": "17:30", "backup": "00:30"}}
 
 

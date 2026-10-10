@@ -397,6 +397,23 @@ def cmd_whatsapp(a) -> int:
 
 
 def _whatsapp(a) -> int:
+    if a.action == "pdf":
+        # The PDF the tablet sends into each chat after the message: the same one the e-mails carry (your own copy
+        # once  import  took it), as "<path from the main folder>\t<the name the business sees>".
+        pdf = attachment()
+        brand = "Aurenflow"
+        try:
+            sys.path.insert(0, str(ROOT))
+            from leadgen.config import load_config
+
+            brand = load_config(str(ROOT / conf("outreach")))["outreach"]["sender"].get("business") or brand
+        except Exception:  # noqa: BLE001 - the name only
+            pass
+        if not pdf.is_file():
+            print("No PDF found (marketing/pitch-in.pdf is missing): type  update  first.")
+            return 1
+        print(f"{pdf.relative_to(ROOT)}\t{brand.replace(' ', '-')}-overview.pdf")
+        return 0
     sys.path.insert(0, str(ROOT))
     from leadgen.config import load_config
     from leadgen.outreach import wa_queue
@@ -472,6 +489,7 @@ def main(argv=None) -> int:
     wn.add_argument("--skip", action="append", default=[], help="a number already dealt with this time")
     wt = wa_sub.add_parser("test", help="a test message to one number, as one line for the tablet")
     wt.add_argument("number")
+    wa_sub.add_parser("pdf", help="the PDF the tablet sends after each message (path and name)")
     wm = wa_sub.add_parser("mark", help="the result of one message")
     wm.add_argument("row", type=int)
     wm.add_argument("key")

@@ -89,7 +89,7 @@ def test_the_command_prints_the_next_message_as_one_line_and_waits_for_office_ho
     assert fields == ["2", "k-", "+1 512-555-0101", "-", "Taco Town", "https://wa.me/15125550101?text=Hi"]
     monkeypatch.setattr(lr, "working_hours", lambda: (False, "Monday 02:00"))
     out = (run("list"), capsys.readouterr().out)
-    hours = "10 AM - 6:30 PM, every day" if market == "in" else "about 8 PM - 2 AM India time"
+    hours = "7 AM - 6:30 PM, every day" if market == "in" else "about 8 PM - 2 AM India time"
     assert out[0] == 4 and "outside office hours in" in out[1] and hours in out[1]
     assert run("list", "--now") == 0
     monkeypatch.setattr(lr, "working_hours", lambda: (True, "Monday 11:00"))
@@ -122,12 +122,12 @@ def test_the_tablet_opens_each_chat_in_whatsapp_business_and_saves_what_you_answ
     for name, body in TABLET_STUBS.items():
         (stubs / name).write_text("#!/bin/bash\n" + body + "\n")
         (stubs / name).chmod(0o755)
-    env = {**os.environ, "STATE": str(tmp_path), "PATH": f"{stubs}{os.pathsep}{os.environ['PATH']}"}
+    env = {**os.environ, "STATE": str(tmp_path), "HOME": str(tmp_path), "PATH": f"{stubs}{os.pathsep}{os.environ['PATH']}"}
     run = lambda keys, **extra: subprocess.run(["bash", str(ROOT / "android" / "whatsapp.sh")], input=keys,  # noqa: E731
                                                env={**env, **extra}, capture_output=True, text=True, timeout=60)
     out = run("\nn\n")                                        # the first one sent, the second not on WhatsApp
     assert out.returncode == 0, out.stderr
-    assert "-> AUS-00002  Taco Town  +1 512-555-0101" in out.stdout and "Nothing more to send now (1 sent)" in out.stdout
+    assert "-> AUS-00002  Taco Town  +1 512-555-0101" in out.stdout and "Nothing more to send now (1 sent" in out.stdout
     log = (tmp_path / "log").read_text().splitlines()
     assert "am start -a android.intent.action.VIEW -d https://wa.me/15125550101?text=Hi -p com.whatsapp.w4b" in log
     assert "mark 3 k-1 +1 512-555-0101 Sent" in log and "mark 4 k-2 +1 512-555-0102 Not on WhatsApp" in log
@@ -178,11 +178,13 @@ case "$*" in
                      esac ;;
   *"whatsapp mark"*) [ -n "$MARK_FAIL_ROW" ] && [[ "$*" == *"whatsapp mark $MARK_FAIL_ROW "* ]] && exit 5
                      echo "Saved" ;;
+  *"whatsapp pdf"*)  printf 'marketing/pitch-in.pdf\tAurenflow-overview.pdf\n' ;;
   *"whatsapp test"*) echo "Google Sheet: connected, 2 messages in the India WhatsApp Queue tab."
                      printf '0\\t-\\t+919876543210\\t-\\tTest message\\thttps://wa.me/919876543210?text=Test\\n' ;;
 esac''',
     "am": 'echo "am $*" >> "$STATE/calls"; echo "Starting: Intent { act=android.intent.action.VIEW }"',
     "termux-open-url": 'echo "open-url $*" >> "$STATE/calls"',
+    "termux-share": 'echo "share $*" >> "$STATE/calls"',
 }
 
 
@@ -206,26 +208,42 @@ def test_the_tablet_keeps_going_when_the_sheet_or_a_key_press_goes_wrong(tmp_pat
 
     unsaved = tmp_path / ".review-leads" / "whatsapp-unsaved.tsv"
     # the Sheet does not take the first result: it is kept on the tablet, the next message still comes, and that
-    # first number is not opened again; a wrong key just asks again
-    out, calls = run(keys="\nx\nn\n", MARK_FAIL_ROW="3")
+    # first number is not opened again; a wrong key just asks again. After the message, the PDF goes into the chat.
+    out, calls = run(keys="\n\nx\nn\n", MARK_FAIL_ROW="3")
     assert out.returncode == 0, out.stderr
     assert "Kept on the tablet" in out.stdout and "Press Enter (sent), n (WhatsApp said" in out.stdout
     assert "whatsapp next --skip +91 98450 11111" in calls
     assert "whatsapp mark 4 k-2 +91 80 4123 4567 Not on WhatsApp" in calls
     assert unsaved.read_text() == "3\tk-1\t+91 98450 11111\tSent\n"            # tried again at the end, still kept
-    assert "Nothing more to send now (1 sent)" in out.stdout and "1 earlier result(s) still waiting" in out.stdout
-    # next time it is saved first, before anything else
+    assert "Nothing more to send now (1 sent, 1 with the PDF)" in out.stdout
+    assert "1 earlier result(s) still waiting" in out.stdout
+    pdf = tmp_path / ".review-leads" / "share" / "Aurenflow-overview.pdf"
+    assert pdf.read_bytes() == (ROOT / "marketing" / "pitch-in.pdf").read_bytes()      # the e-mails' PDF, a good name
+    assert (f"am start -a android.intent.action.SEND -t application/pdf --grant-read-uri-permission --eu "
+            f"android.intent.extra.STREAM content://com.termux.files{pdf} --es jid 919845011111@s.whatsapp.net "
+            "-p com.whatsapp.w4b") in calls
+    assert sum(c.startswith("am start -a android.intent.action.SEND") for c in calls) == 1     # not after "n"
+    props = (tmp_path / ".termux" / "termux.properties").read_text()
+    assert props.count("allow-external-apps = true") == 1          # WhatsApp may read the shared PDF
+    # next time it is saved first, before anything else; the Termux setting is not added twice
     out, calls = run(keys="q\n")
     assert calls[0] == "whatsapp mark 3 k-1 +91 98450 11111 Sent" and unsaved.read_text() == ""
+    assert (tmp_path / ".termux" / "termux.properties").read_text() == props
+    # the share menu when WhatsApp did not take the PDF straight away; --no-pdf leaves it out
+    out, calls = run(keys="\nr\n\nq\n")
+    assert f"share -a send -c application/pdf {pdf}" in calls and "(Share menu: choose WhatsApp Business" in out.stdout
+    out, calls = run("--no-pdf", keys="\nq\n")
+    assert not any("SEND" in c for c in calls) and "whatsapp pdf" not in calls
     # the Sheet does not answer at all: three tries, then a clear message - no crash
     out, calls = run(NEXT_FAIL="1")
     assert out.returncode == 0 and calls.count("whatsapp next") == 3
     assert "The WhatsApp Queue could not be read (0 sent so far)" in out.stdout
     # the test message: opened in WhatsApp Business, and what happened is said plainly
-    out, calls = run("test", "987-654-3210", keys="\n")
+    out, calls = run("test", "987-654-3210", keys="\n\n")
     assert out.returncode == 0 and "Google Sheet: connected, 2 messages" in out.stdout
     assert "whatsapp test 987-654-3210" in calls
     assert "am start -a android.intent.action.VIEW -d https://wa.me/919876543210?text=Test -p com.whatsapp.w4b" in calls
-    assert "Test sent: Termux, the Google Sheet and WhatsApp Business work together." in out.stdout
+    assert any("--es jid 919876543210@s.whatsapp.net" in c for c in calls)
+    assert "Test sent: Termux, the Google Sheet and WhatsApp Business work together, the PDF too." in out.stdout
     out, _ = run("test", "987-654-3210", keys="n\n")
     assert "is not on WhatsApp: check the number" in out.stdout

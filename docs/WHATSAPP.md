@@ -10,7 +10,16 @@ the business's next number is queued on the robot's next run (within the hour); 
 simply passed over. Businesses with an e-mail address get the e-mail first; WhatsApp goes to those without one (and
 to those whose e-mails got no answer). A business you messaged is marked *WhatsApp sent* in the India Leads tab and
 gets no e-mail on top. Pace: **10 on the first day, 5 more after each day you actually sent, up to 40** a day. Send
-them **10 AM - 6:30 PM, every day** (Sunday too). The queue is the **India WhatsApp Queue** tab. The rest of this page
+them **7 AM - 6:30 PM, every day** (Sunday too).
+
+**The message and the PDF.** The WhatsApp message is the first e-mail's text, with the business's name in it (and
+"reply STOP" at the end instead of the e-mail's "reply no"). After you sent it, the tablet opens the same chat with
+the PDF ready (the one the e-mails carry: your own copy once `import` took it, named `Aurenflow-overview.pdf`): press
+Send again, come back, press Enter. If WhatsApp shows a list of chats instead of the chat, tap the business at the
+top; if nothing opens, press `r` for Android's share menu (WhatsApp Business, then the business at the top). For
+this, the tablet adds one line to Termux's settings once (`allow-external-apps = true` in
+`~/.termux/termux.properties`): WhatsApp may then read the PDF the command shares. `whatsapp --no-pdf` leaves the PDF
+out. The queue is the **India WhatsApp Queue** tab. The rest of this page
 (the rules, the setup) is the same; the US parts are marked.
 
 **Why you still press Send yourself.** WhatsApp's terms forbid automatic and bulk messages and it bans numbers that
@@ -26,7 +35,8 @@ next time; that chat is never opened twice. A wrong key just asks again. Ctrl+C 
 **A test message first:** `whatsapp test` and a number, e.g. `whatsapp test 98765 43210` (10 digits are taken as an
 Indian number). It reads
 the Sheet (so you see the tablet is connected to it), opens WhatsApp Business with a test message typed, you press
-Send, and it tells you whether Termux, the Sheet and WhatsApp Business work together. Nothing is saved in the Sheet.
+Send, then the PDF the same way, and it tells you whether Termux, the Sheet and WhatsApp Business work together.
+Nothing is saved in the Sheet.
 
 ## The rules that decide the design
 
@@ -59,7 +69,7 @@ WhatsApp number, for people who say yes, and for everyone who writes to you firs
    It starts at 5 a day and adds 5 every 7 days you actually sent, up to 20, because a new number that writes a
    lot of strangers is reported and banned. A number is never queued twice; "Not interested" or STOP puts it on
    the Do Not Contact list.
-2. **You type `whatsapp` on the tablet** in the businesses' office hours (India: 10 AM - 6:30 PM, every day;
+2. **You type `whatsapp` on the tablet** in the businesses' office hours (India: 7 AM - 6:30 PM, every day;
    US: about 8 PM - 2 AM India time on US working days; a message at night looks like spam). For each message, WhatsApp Business opens with the text typed; you
    press Send, switch back to Termux and press Enter (or `n` = not on WhatsApp, `s` = skip, `q` = stop for now).
    The result goes into the Sheet, and the robot reads it on its next run.
@@ -109,7 +119,7 @@ WhatsApp number, for people who say yes, and for everyone who writes to you firs
    - **Labels**: New lead, Preview sent, Interested, Paid, Not interested.
 5. **Your WhatsApp number in the settings** (it goes into the e-mail signature and your copy of the PDF): type
    `settings` and set `OUTREACH_SENDER_PHONE=+<country code and number>`, save (Ctrl+O, Enter, Ctrl+X).
-6. **Every day** in office hours (India: 10 AM - 6:30 PM): `whatsapp`, and answer what comes back.
+6. **Every day** in office hours (India: 7 AM - 6:30 PM): `whatsapp`, and answer what comes back.
 
 ## Later: answers by a machine
 

@@ -84,7 +84,8 @@ def test_india_market_office_hours_cities_and_files(monkeypatch, tmp_path):
     assert lr.working_hours(datetime(2026, 10, 10, 17, 0, tzinfo=ist))[0]                     # Saturday too
     assert lr.working_hours(datetime(2026, 10, 11, 11, 0, tzinfo=ist))[0]                     # and Sunday
     assert not lr.working_hours(datetime(2026, 10, 12, 21, 0, tzinfo=ist))[0]                 # not at night
-    assert not lr.working_hours(datetime(2026, 10, 12, 9, 30, tzinfo=ist))[0]                 # nor before 10
+    assert lr.working_hours(datetime(2026, 10, 12, 7, 0, tzinfo=ist))[0]                       # from 7 AM
+    assert not lr.working_hours(datetime(2026, 10, 12, 6, 30, tzinfo=ist))[0]                 # not before
     assert lr.fleet()[:5] == ["bengaluru", "kolkata", "chennai", "delhi", "mumbai"]
     assert lr.conf("kolkata") == "config/in/kolkata.toml"
     assert all((ROOT / lr.conf(c)).is_file() for c in lr.fleet())
@@ -318,3 +319,15 @@ def test_a_city_campaign_under_way_runs_every_day_until_it_is_finished(tmp_path,
     state = city_progress(tmp_path / "chennai.sqlite", datetime(2026, 9, 3).date())
     assert state == {"day": 3, "days": 7, "searched_pct": 50, "open": 5, "mapped": 0, "unfinished": True}
     assert city_progress(tmp_path / "missing.sqlite") is None
+
+
+def test_the_tablet_is_told_which_pdf_goes_into_the_whatsapp_chats(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("MARKET", "in")
+    lr = local_run()
+    monkeypatch.setattr(lr, "DATA", tmp_path)
+    args = type("A", (), {"action": "pdf"})()
+    assert lr.cmd_whatsapp(args) == 0
+    assert capsys.readouterr().out.strip() == "marketing/pitch-in.pdf\tAurenflow-overview.pdf"   # the code's India PDF
+    monkeypatch.setattr(lr, "attachment", lambda: lr.ROOT / "data" / "attachment-in.pdf")    # your copy once imported
+    monkeypatch.setattr(lr.Path, "is_file", lambda self: True)
+    assert lr.cmd_whatsapp(args) == 0 and capsys.readouterr().out.split("\t")[0] == "data/attachment-in.pdf"

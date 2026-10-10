@@ -75,6 +75,10 @@ Not interested? Just reply "no" and we won't write again.""",
     "whatsapp_cold": ("Hi {business} team, I'm {sender_first} from {sender_business}. We help {audience} get more Google reviews "
                       "with a simple, Google-compliant QR code. Could I send you a free preview? If you'd rather not "
                       "get messages from us, just reply STOP."),
+    # The ending of a WhatsApp message that uses the first e-mail's words ([outreach.whatsapp] same_as_email).
+    "whatsapp_footer": """{sender_business}
+
+Not interested? Just reply STOP and we won't message you again.""",
     "whatsapp_opted_in": ("Hi {first_name_or_team}, this is {sender_first} from {sender_business} - thanks for your reply! "
                           "Here is the free preview for {business}: {demo_link} Happy to answer any questions here."),
     "letter": """{greeting}

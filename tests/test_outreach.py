@@ -649,3 +649,24 @@ def test_every_phone_number_is_tried_one_at_a_time_until_one_is_on_whatsapp(tmp_
     # Olive Bistro's other number comes next; Saffron Lounge has no other number: it is left, nothing breaks
     assert [r["Number"] for r in tab(sess, "WhatsApp Queue")] == ["+91 98450 11111", "+91 80 4000 0001", "+91 80 4123 4567"]
     assert store.scalar("SELECT COUNT(*) FROM wa WHERE result='not_on_whatsapp'") == 2
+
+
+def test_the_whatsapp_message_can_be_the_first_emails_words_with_a_whatsapp_ending(tmp_path):
+    leads = [lead(1, "Olive Bistro", phones="+91 98450 11111 (mobile)", priority="High", category="Restaurant",
+                  usp="Wood-fired pizzas and a rooftop garden")]
+    sess, client = sheet_with(leads)
+    smtp, clock = SmtpWorld(), Clock(ts(2026, 10, 11, 11))
+    cfg = cfg_with()
+    cfg["outreach"]["offer"] = "It's a one-time price from ₹3,000, no monthly fees."
+    cfg["outreach"]["whatsapp"].update(include_mobiles=True, same_as_email=True)
+    runner(cfg, OutreachStore(str(tmp_path / "o.sqlite")), client, clock, smtp, live=False).run()
+    (row,) = tab(sess, "WhatsApp Queue")
+    text = row["Message"]
+    assert text.startswith("Hello Olive Bistro team,\n\nI came across Olive Bistro and liked this line on your website: "
+                           '"Wood-fired pizzas and a rooftop garden".')
+    assert "more reviews help Olive Bistro show up higher on Google Maps" in text
+    assert "₹3,000, no monthly fees. I've attached a two-page overview (PDF)" in text      # the PDF follows in the chat
+    assert text.endswith("Thanks,\nRavi Kumar\nGreen Supply Co\n\nNot interested? Just reply STOP and we won't message "
+                         "you again.")
+    assert "e-mail again" not in text and "WhatsApp/phone" not in text
+    assert row["Open Chat"].startswith("https://wa.me/919845011111?text=Hello%20Olive%20Bistro%20team")

@@ -38,11 +38,12 @@ class Market:
 
 
 MARKETS = {
-    # India: every day (restaurants, cafés, salons and gyms are open on Sundays too)
+    # India: every day (restaurants, cafés, salons and gyms are open on Sundays too), e-mails from 7 AM (your choice,
+    # 11 October 2026), so they are waiting when the owners open their inbox in the morning
     "in": Market(code="in", name="India", tz=ZoneInfo("Asia/Kolkata"), place="India", days=(0, 1, 2, 3, 4, 5, 6),
-                 hours=(10.0, 18.5), email_slots=tuple(f"{h:02d}:35" for h in range(10, 18)),
+                 hours=(7.0, 18.5), email_slots=tuple(f"{h:02d}:05" for h in range(7, 19)),
                  outreach_db="outreach-in.sqlite", pdf_suffix="-in", own_pdfs=("Aurenflow-India-overview*.pdf",),
-                 india_time="10 AM - 6:30 PM, every day"),
+                 india_time="7 AM - 6:30 PM, every day"),
     "us": Market(code="us", name="the US", tz=ZoneInfo("America/Chicago"), place="Chicago", days=(0, 1, 2, 3, 4),
                  hours=(8.5, 16.5), email_slots=tuple(f"{h:02d}:35" for h in range(9, 16)),
                  outreach_db="outreach.sqlite", pdf_suffix="",
