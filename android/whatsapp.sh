@@ -6,6 +6,7 @@
 #   whatsapp list         only show what is waiting
 #   whatsapp --now        also outside office hours (India: 7 AM - 6:30 PM, every day)
 #   whatsapp --no-pdf     the messages without the PDF
+#   whatsapp pdf NUMBER   only the PDF, to one number (e.g. a business that got the message without it)
 #   whatsapp test NUMBER  a test message and the PDF to one number (e.g. your own): checks the Sheet, Termux and
 #                         WhatsApp Business
 # Nothing is sent by a machine: WhatsApp's terms forbid automated and bulk messages and it bans numbers that send
@@ -26,8 +27,12 @@ SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 HOST_DIR="$(dirname "$(dirname "$SELF")")"          # the robot's folder, seen from Termux
 SHARE="$KEEP/share"                                 # the PDF, under the name the businesses see
 PDF=""
+HAND=""
+LOG="$KEEP/whatsapp.log"                            # what the tablet tried, for when something does not work
+METHOD_FILE="$KEEP/whatsapp-pdf-method"             # the way of attaching the PDF that worked last
 
 inside() { proot-distro login "$NAME" -- bash "$DIR/android/inside.sh" "$@" </dev/null; }   # the keyboard stays here
+note() { mkdir -p "$KEEP"; printf '%s %s\n' "$(date '+%F %T')" "$*" >> "$LOG"; }
 
 # Open the chat in WhatsApp Business; if Android cannot aim at it, open the link as usual (Android then uses the app
 # set for WhatsApp links: make that WhatsApp Business, docs/WHATSAPP.md step 3). Fails only if neither works.
@@ -66,41 +71,80 @@ allow_sharing() {
   return 0
 }
 
-# Android's share menu with the PDF: WhatsApp Business, then the business's chat (at the top: it was just written to).
-share_menu() {
-  echo "   (Share menu: choose WhatsApp Business, then the business's chat at the top of the list.)"
-  if command -v termux-share >/dev/null 2>&1 && termux-share -a send -c application/pdf "$PDF" >/dev/null 2>&1; then
-    return 0
-  fi
-  termux-open --send --content-type application/pdf "$PDF" >/dev/null 2>&1
-}
-
-# The PDF straight into the chat of this number in WhatsApp Business (the share menu if Android refuses).
-send_pdf() {
-  local digits="${1//[!0-9]/}" out
-  out="$(am start -a android.intent.action.SEND -t application/pdf --grant-read-uri-permission \
-           --eu android.intent.extra.STREAM "content://com.termux.files$PDF" \
-           --es jid "$digits@s.whatsapp.net" -p "$W4B" 2>&1)"
-  case "$out" in *rror*|*xception*|*"Unable"*) share_menu ;; esac
+# How the PDF gets into the chat. Android phones differ, so there are three ways, tried in this order (the way that
+# worked last on this tablet first, remembered in $METHOD_FILE):
+#   direct  WhatsApp Business opens this business's chat with the PDF ready (one tap: Send)
+#   menu    Android's share menu: WhatsApp Business, then the business at the top of the list (it was just written to)
+#   hand    the paperclip in the chat -> Document -> the PDF in the Download folder
+# Everything the tablet tries is written to $LOG, so a problem can be looked at later.
+pdf_direct() {
+  local digits="${1//[!0-9]/}" uri="content://com.termux.files$PDF" out
+  # The PDF's address goes in twice: as the intent's data (only then does Android let WhatsApp read it) and as the
+  # attachment WhatsApp takes; jid picks the chat.
+  out="$(am start -a android.intent.action.SEND -t application/pdf -d "$uri" --grant-read-uri-permission \
+           --eu android.intent.extra.STREAM "$uri" --es jid "$digits@s.whatsapp.net" -p "$W4B" 2>&1)"
+  note "direct $digits: $out"
+  case "$out" in *rror*|*xception*|*"Unable"*) return 1 ;; esac
   return 0
 }
 
-# After a message went out: the PDF into the same chat.
+pdf_menu() {
+  local out code
+  if command -v termux-share >/dev/null 2>&1; then
+    out="$(termux-share -a send -c application/pdf "$PDF" 2>&1)"; code=$?
+    note "menu (termux-share) $code: $out"
+    [ "$code" = 0 ] && return 0
+  fi
+  out="$(termux-open --send --chooser --content-type application/pdf "$PDF" 2>&1)"; code=$?
+  note "menu (termux-open) $code: $out"
+  return "$code"
+}
+
+# The PDF also in the Download folder (its own subfolder, so  import  never takes it for your copy): for the
+# paperclip way.
+copy_for_hand() {
+  local dir
+  for dir in /sdcard/Download "$HOME/storage/downloads"; do
+    if [ -d "$dir" ] && mkdir -p "$dir/Aurenflow" 2>/dev/null && cp "$PDF" "$dir/Aurenflow/" 2>/dev/null; then
+      HAND="Download -> Aurenflow -> $(basename "$PDF")"
+      return 0
+    fi
+  done
+  HAND="the PDF ($(basename "$PDF")) in your Download folder"
+}
+
+# After a message went out: the PDF into the same chat. "n" = it did not show up: the next way is tried.
 pdf_step() {
   [ -n "$PDF" ] || return 0
-  echo "   Now the PDF: WhatsApp Business opens this chat with the PDF ready - press Send, then come back here."
-  echo "   (If WhatsApp shows a list of chats instead, tap this business at the top.)"
-  send_pdf "$1"
-  local answer
-  while true; do
-    read -r -p "   [Enter] PDF sent   r = open the share menu instead   s = no PDF this time: " answer || answer=s
-    case "$answer" in
-      "")  pdfs=$((pdfs + 1)); return 0 ;;
-      r|R) share_menu ;;
-      s|S) return 0 ;;
-      *)   echo "   Press Enter (PDF sent), r (share menu) or s (no PDF for this one)." ;;
-    esac
+  local first order=() m answer
+  first="$(cat "$METHOD_FILE" 2>/dev/null)"
+  for m in "$first" direct menu hand; do
+    case " ${order[*]} " in *" $m "*) ;; *) [ -n "$m" ] && order+=("$m") ;; esac
   done
+  for m in "${order[@]}"; do
+    case "$m" in
+      direct)
+        echo "   Now the PDF: WhatsApp Business opens this chat with the PDF ready - press Send, then come back here."
+        pdf_direct "$1" || { echo "   (Android did not open it - trying the next way.)"; continue; } ;;
+      menu)
+        echo "   Now the PDF, through the share menu: choose WhatsApp Business, then this business at the top, then Send."
+        pdf_menu || { echo "   (The share menu did not open - trying the next way.)"; continue; } ;;
+      hand)
+        [ -n "$HAND" ] || copy_for_hand
+        echo "   Now the PDF, by hand: in this chat tap the paperclip -> Document -> $HAND -> Send." ;;
+      *) continue ;;
+    esac
+    while true; do
+      read -r -p "   [Enter] PDF sent   n = it did not show up (try another way)   s = no PDF this time: " answer || answer=s
+      case "$answer" in
+        "")  pdfs=$((pdfs + 1)); mkdir -p "$KEEP"; echo "$m" > "$METHOD_FILE"; note "PDF sent ($m) to $1"; return 0 ;;
+        n|N) note "PDF did not show up ($m) for $1"; break ;;
+        s|S) note "PDF skipped for $1"; return 0 ;;
+        *)   echo "   Press Enter (PDF sent), n (it did not show up: another way) or s (no PDF for this one)." ;;
+      esac
+    done
+  done
+  echo "   No way worked for this one. Show me the end of $LOG (command: tail -n 30 $LOG)."
 }
 
 # Save one result in the Sheet; when the Sheet cannot be reached it is kept on the tablet for the next time.
@@ -162,6 +206,16 @@ done
 set -- "${args[@]}"
 case "${1:-}" in
   list) shift; inside whatsapp list "$@"; exit $? ;;
+  pdf)
+    shift
+    digits="$*"; digits="${digits//[!0-9]/}"
+    [ "${#digits}" = 10 ] && digits="91$digits"                 # 10 digits: an Indian number
+    [ "${#digits}" -ge 11 ] || { echo "usage: whatsapp pdf NUMBER   (for example: whatsapp pdf 93217 07545)"; exit 2; }
+    prepare_pdf
+    [ -n "$PDF" ] || exit 1
+    echo "-> the PDF to +$digits (the chat must exist: a message was sent to this number before)"
+    pdf_step "$digits"
+    exit 0 ;;
   test)
     shift
     [ -n "${1:-}" ] || { echo "usage: whatsapp test NUMBER   (for example: whatsapp test 98765 43210)"; exit 2; }
@@ -187,7 +241,7 @@ case "${1:-}" in
     exit 0 ;;
   --now) now="--now" ;;
   "")    ;;
-  *)     echo "usage: whatsapp [list | test NUMBER] [--now] [--no-pdf]"; exit 2 ;;
+  *)     echo "usage: whatsapp [list | test NUMBER | pdf NUMBER] [--now] [--no-pdf]"; exit 2 ;;
 esac
 
 save_unsaved

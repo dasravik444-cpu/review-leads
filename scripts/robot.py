@@ -614,7 +614,8 @@ def status_text(now: float | None = None) -> str:
     if em:
         cap = daily_limit(em["days"], e_cfg)
         r = em["replies"]
-        lines += ["", f"{head}: {em['today']} sent today (today's limit {cap}, rising slowly to 40), {em['all']} in all "
+        top = e_cfg.get("max_per_day", 40)
+        lines += ["", f"{head}: {em['today']} sent today (today's limit {cap}, rising slowly to {top}), {em['all']} in all "
                       f"({em['first']} first e-mails); bounced {em['bounced']}; replies: interested {r.get('positive', 0)}, "
                       f"not interested {r.get('negative', 0)}, other {r.get('other', 0)}"]
     elif paused:

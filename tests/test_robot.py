@@ -195,7 +195,7 @@ def test_status_says_when_sending_is_paused_in_the_config(tmp_path, monkeypatch)
     r = robot(tmp_path, monkeypatch)
     now = datetime(2026, 10, 10, 11, 25, tzinfo=IST).timestamp()
     r.save_status({"scheduler": {"heartbeat": now}})
-    e = {"enabled": False, "start_per_day": 15, "step": 5, "step_every_days": 3, "max_per_day": 40}
+    e = {"enabled": False, "start_per_day": 15, "step": 5, "step_every_days": 3, "max_per_day": 40}  # the US pace
     monkeypatch.setattr(r, "email_settings", lambda *_: e)
     text = r.status_text(now)
     row = next(line for line in text.splitlines() if line.startswith("E-mails "))

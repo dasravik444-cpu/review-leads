@@ -62,6 +62,11 @@ def test_india_outreach_has_its_own_tabs_rupee_offer_and_runs_every_day():
     assert "₹3,000" in o["offer"] and "$" not in o["offer"]
     assert o["email"]["enabled"] is True                             # on since 11 October 2026
     assert o["email"]["days"] == ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+    e = o["email"]
+    # an old Gmail: 50 a day for 3 sending days, then 75, then 100; 12 hourly runs can carry 100
+    assert (e["start_per_day"], e["step"], e["step_every_days"], e["max_per_day"]) == (50, 25, 3, 100)
+    assert e["max_per_run"] * 12 >= e["max_per_day"]
+    assert e["max_per_run"] * e["max_gap_seconds"] <= e["run_budget_minutes"] * 60      # each run's share fits its time
     w = o["whatsapp"]
     assert w["include_mobiles"] is True and w["include_landlines"] is True     # every phone number is tried
     assert (w["start_per_day"], w["step"], w["step_every_days"], w["max_per_day"]) == (10, 5, 1, 40)

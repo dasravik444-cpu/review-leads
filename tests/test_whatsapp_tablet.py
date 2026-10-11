@@ -219,9 +219,13 @@ def test_the_tablet_keeps_going_when_the_sheet_or_a_key_press_goes_wrong(tmp_pat
     assert "1 earlier result(s) still waiting" in out.stdout
     pdf = tmp_path / ".review-leads" / "share" / "Aurenflow-overview.pdf"
     assert pdf.read_bytes() == (ROOT / "marketing" / "pitch-in.pdf").read_bytes()      # the e-mails' PDF, a good name
-    assert (f"am start -a android.intent.action.SEND -t application/pdf --grant-read-uri-permission --eu "
-            f"android.intent.extra.STREAM content://com.termux.files{pdf} --es jid 919845011111@s.whatsapp.net "
-            "-p com.whatsapp.w4b") in calls
+    uri = f"content://com.termux.files{pdf}"
+    # the PDF's address as the intent's data too: only then may WhatsApp read it
+    assert (f"am start -a android.intent.action.SEND -t application/pdf -d {uri} --grant-read-uri-permission --eu "
+            f"android.intent.extra.STREAM {uri} --es jid 919845011111@s.whatsapp.net -p com.whatsapp.w4b") in calls
+    method = tmp_path / ".review-leads" / "whatsapp-pdf-method"
+    log = tmp_path / ".review-leads" / "whatsapp.log"
+    assert method.read_text().strip() == "direct" and "PDF sent (direct) to +91 98450 11111" in log.read_text()
     assert sum(c.startswith("am start -a android.intent.action.SEND") for c in calls) == 1     # not after "n"
     props = (tmp_path / ".termux" / "termux.properties").read_text()
     assert props.count("allow-external-apps = true") == 1          # WhatsApp may read the shared PDF
@@ -229,9 +233,21 @@ def test_the_tablet_keeps_going_when_the_sheet_or_a_key_press_goes_wrong(tmp_pat
     out, calls = run(keys="q\n")
     assert calls[0] == "whatsapp mark 3 k-1 +91 98450 11111 Sent" and unsaved.read_text() == ""
     assert (tmp_path / ".termux" / "termux.properties").read_text() == props
-    # the share menu when WhatsApp did not take the PDF straight away; --no-pdf leaves it out
-    out, calls = run(keys="\nr\n\nq\n")
-    assert f"share -a send -c application/pdf {pdf}" in calls and "(Share menu: choose WhatsApp Business" in out.stdout
+    # the PDF did not show up ("n"): the share menu next, and that way is remembered for the next time
+    out, calls = run(keys="\nn\n\nq\n")
+    assert f"share -a send -c application/pdf {pdf}" in calls and "through the share menu" in out.stdout
+    assert method.read_text().strip() == "menu" and "PDF did not show up (direct)" in log.read_text()
+    out, calls = run(keys="\n\nq\n")
+    assert not any("action.SEND" in c for c in calls) and f"share -a send -c application/pdf {pdf}" in calls
+    # neither showed up: by hand, with the PDF copied where WhatsApp's paperclip finds it; still nothing: say so
+    out, calls = run(keys="\nn\nn\nn\nq\n")
+    assert "Now the PDF, by hand: in this chat tap the paperclip -> Document ->" in out.stdout
+    assert "No way worked for this one. Show me the end of" in out.stdout and "1 sent, 0 with the PDF" not in out.stdout
+    # only the PDF, to a number that already got the message (10 digits: an Indian number)
+    method.write_text("direct\n")
+    out, calls = run("pdf", "93217", "07545", keys="\n")
+    assert out.returncode == 0 and "-> the PDF to +919321707545" in out.stdout
+    assert any("--es jid 919321707545@s.whatsapp.net" in c for c in calls) and "whatsapp next" not in calls
     out, calls = run("--no-pdf", keys="\nq\n")
     assert not any("SEND" in c for c in calls) and "whatsapp pdf" not in calls
     # the Sheet does not answer at all: three tries, then a clear message - no crash

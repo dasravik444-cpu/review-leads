@@ -77,8 +77,18 @@ the other 11. The robot stays on a city every evening until its campaign is fini
 Bengaluru is a 7-day campaign (all its cafés, restaurants, bars, salons and gyms spread over 7 evenings); the other
 cities take about 1,000 businesses a day, as many days as that needs (a city with 20,000 takes about 20 days).
 `robot status` shows the campaign under way: which day, how much of the city is searched, and how many businesses of
-these kinds the open map data has there. `ROBOT_LEAD_MINUTES=240` in `settings` gives the lead search more time. E-mails start at 15 a day and rise by
-5 every 3 sending days to 40 (a new Gmail that sends much more is soon treated as spam). `robot status` shows what it does,
+these kinds the open map data has there. `ROBOT_LEAD_MINUTES=240` in `settings` gives the lead search more time.
+
+**How many e-mails a day.** India (the Gmail is more than a year old): 50 a day for 3 sending days, then 75 for 3,
+then 100, follow-ups included, spread over the hourly runs 1 - 2.5 minutes apart (`[outreach.email]` in
+`config/in/_base.toml`). The US: 15 a day, rising by 5 every 3 sending days to 40. Why not 500: a free Gmail account
+stops sending for 24 hours at about 500 a day, Google's Gmail policy forbids unsolicited commercial mail, and it
+judges by how recipients react (spam reports), not by a fixed number: more cold e-mail from one personal address
+means more reports and a higher risk of losing the account (and its inbox). For several hundred a day the safer
+way is Google Workspace on your own domain (aurenflow.in, say): several mailboxes, each sending about 50 - 100 a day,
+with SPF, DKIM and DMARC set up. Sending also stops by itself when more than 5% bounce, or after 5 bounces in a day.
+
+`robot status` shows what it does,
 the last and next run of each job, and per city how many businesses it found and how many have an e-mail and a
 phone; its first line is the switch (`Switch: ON`). `robot log` shows today's log, `robot off` stops it (the job it
 is on saves first, up to 3 minutes, and runs again when the robot is back on), `robot run leads` runs a job now. It starts again by itself after a restart of the tablet (Termux:Boot app) and within 15 minutes if

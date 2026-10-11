@@ -16,10 +16,13 @@ them **7 AM - 6:30 PM, every day** (Sunday too).
 "reply STOP" at the end instead of the e-mail's "reply no"). After you sent it, the tablet opens the same chat with
 the PDF ready (the one the e-mails carry: your own copy once `import` took it, named `Aurenflow-overview.pdf`): press
 Send again, come back, press Enter. If WhatsApp shows a list of chats instead of the chat, tap the business at the
-top; if nothing opens, press `r` for Android's share menu (WhatsApp Business, then the business at the top). For
-this, the tablet adds one line to Termux's settings once (`allow-external-apps = true` in
+top. **If the PDF does not show up, press `n`**: the tablet tries the next way, Android's share menu (WhatsApp
+Business, then the business at the top of the list), and then by hand (the paperclip in the chat → Document →
+Download → Aurenflow → the PDF). The way that worked is remembered and tried first next time, and everything the
+tablet tried is written to `~/.review-leads/whatsapp.log` (`tail -n 30 ~/.review-leads/whatsapp.log` shows it). For
+the first way, the tablet adds one line to Termux's settings once (`allow-external-apps = true` in
 `~/.termux/termux.properties`): WhatsApp may then read the PDF the command shares. `whatsapp --no-pdf` leaves the PDF
-out. The queue is the **India WhatsApp Queue** tab. The rest of this page
+out; `whatsapp pdf 93217 07545` sends only the PDF to a business that already got the message. The queue is the **India WhatsApp Queue** tab. The rest of this page
 (the rules, the setup) is the same; the US parts are marked.
 
 **Why you still press Send yourself.** WhatsApp's terms forbid automatic and bulk messages and it bans numbers that

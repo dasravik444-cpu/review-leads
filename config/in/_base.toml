@@ -124,10 +124,17 @@ notify_email = ""
 [outreach.email]
 # On since 11 October 2026. Every day: restaurants, cafés, salons and gyms are open on Sundays too.
 enabled = true
-start_per_day = 15
-step = 5
+# The Gmail is more than a year old (your word, 11 October 2026): 50 a day for 3 sending days, then 75, then 100
+# (follow-ups included). More than about 100-150 a day of cold e-mail from one free Gmail risks the account
+# (docs/LOCAL.md, "How many e-mails a day"). Sending stops by itself if more than 5% bounce.
+start_per_day = 50
+step = 25
 step_every_days = 3
-max_per_day = 40
+max_per_day = 100
+max_per_run = 12           # one run an hour, 07:05 - 18:05: 100 fit into the day
+min_gap_seconds = 60       # 1 - 2.5 minutes between two e-mails, so no burst
+max_gap_seconds = 150
+max_bounces_per_day = 5
 window_start = "07:00"
 window_end = "18:30"
 days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]

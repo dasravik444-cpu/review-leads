@@ -40,7 +40,7 @@ from .providers.fsq import FoursquareAPI
 from .providers.places_api import PlacesAPI
 from .quality import has_name_word, is_aggregator, is_chain, is_link_hub, is_qualified, match_category, name_score
 from .report import contact_coverage, lead_row, markdown_summary, masked_samples, plan_rows, sheet_condition
-from .util import get_logger, jdump, jload, local_date
+from .util import get_logger, jdump, jload, local_date, local_now
 
 log = get_logger("runner")
 
@@ -1068,7 +1068,7 @@ class Runner:
         prog = planner.progress()
         health = ", ".join(f"{k}:{'paused' if v['open'] else 'ok'}" for k, v in self.http.breaker_report().items()
                            if not k.startswith("overpass:") or v["failed"])
-        return [self.cfg["campaign"]["id"], self.today, time.strftime("%H:%M", time.localtime(self.started)),
+        return [self.cfg["campaign"]["id"], self.today, local_now(self.cfg.tz, self.started).strftime("%H:%M"),  # campaign time
                 round((self.now() - self.started) / 60, 1),
                 getattr(self, "plan_day", ""), f"{self.sched['id']}. {self.sched['name']}" if getattr(self, "sched", None) else "",
                 ", ".join(str(x) for x in sorted(x for x in self.parts_worked if x)), self.stats["searches"],
