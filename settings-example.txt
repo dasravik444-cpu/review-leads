@@ -9,6 +9,14 @@ RQ_SHEET_ID=
 OUTREACH_GMAIL_ADDRESS=das.ravik002@gmail.com
 OUTREACH_GMAIL_APP_PASSWORD=
 
+# 2b. More Gmail accounts (optional, up to 3): each one sends its own share of the businesses, by the same sending
+#     plan, and gets its own "India Outreach 2" tab. Each needs its own app password (made while signed in to THAT
+#     Gmail). Leave empty for one account.
+OUTREACH_GMAIL_ADDRESS_2=
+OUTREACH_GMAIL_APP_PASSWORD_2=
+OUTREACH_GMAIL_ADDRESS_3=
+OUTREACH_GMAIL_APP_PASSWORD_3=
+
 # 3. Printed under every e-mail: your WhatsApp Business number with the country code (+91...). The postal address
 #    is needed only for US e-mails (US law asks for one); leave it empty for India.
 OUTREACH_SENDER_PHONE=

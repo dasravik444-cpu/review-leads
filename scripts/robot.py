@@ -10,7 +10,7 @@ unless it says MARKET=us; leadgen/market.py), so the lead jobs move out of their
                        India market                         US market
     update             06:30                                11:00      the newest version (kept only when it starts
                                                                        cleanly, else the old one stays)
-    emails             07:05 ... 18:05 every day            09:35 ... 15:35 Chicago time, Monday to Friday
+    emails             every hour, 00:05 ... 23:05          09:35 ... 15:35 Chicago time, Monday to Friday
                                                                        (about 8 PM to 2 AM India time)
     leads              01:00 (up to 3 hours)                13:00      the city whose campaign is under way (else the
                                                                        next one), then 30 minutes of e-mail hunt
@@ -75,6 +75,7 @@ class Job:
 # Lead search time per city and day (minutes), unless ROBOT_LEAD_MINUTES says otherwise: India aims at about 1,000
 # businesses a day (the run stops sooner once the day's share is done).
 LEAD_MINUTES = {"in": 180, "us": 60}
+RETRY_JOBS, RETRIES, RETRY_MINUTES = ("leads", "hunt"), 2, 30    # a failed lead job runs again, twice, 30 minutes apart
 # The lead jobs' times (India time), out of the way of the market's e-mail hours.
 # India: the lead search at night (01:00, up to about 3 hours, then the e-mail hunt), so new leads are in the Sheet
 # before the first e-mails at 07:05.
@@ -86,7 +87,7 @@ def make_jobs(m: markets.Market) -> dict[str, Job]:
     t = LEAD_TIMES[m.code]
     return {j.name: j for j in [
         Job("update", "Update", (t["update"],), INDIA, timeout_min=20, switch="ROBOT_AUTO_UPDATE"),
-        Job("emails", "E-mails", m.email_slots, m.tz, weekdays=m.days, timeout_min=55, switch="ROBOT_EMAILS"),
+        Job("emails", "E-mails", m.email_slots, m.tz, weekdays=m.days, timeout_min=58, switch="ROBOT_EMAILS"),
         Job("leads", "Lead search", (t["leads"],), INDIA, timeout_min=0, switch="ROBOT_LEADS"),   # timeout: per city
         Job("hunt", "E-mail hunt", (t["hunt"],), INDIA, timeout_min=80, switch="ROBOT_LEADS"),
         Job("backup", "Backup", (t["backup"],), INDIA, timeout_min=20),
@@ -368,8 +369,12 @@ def run_job(job: Job, settings: dict, should_stop=lambda: False, serving: bool =
             rec["retry_at"] = time.time() + 300   # a job started by hand holds the lock: again in 5 minutes
         elif result.startswith("stopped (robot off)"):
             rec.update(result="stopped (robot off) - runs again when on", retry_at=0)   # the slot stays due
+        elif job.name in RETRY_JOBS and not result.startswith("ok") and rec.get("fails", 0) < RETRIES:
+            # The lead search must not miss a day: the slot stays due and it runs again in half an hour (twice)
+            again = time.time() + RETRY_MINUTES * 60
+            rec.update(result=f"{result[:60]} - again at {fmt(again)[-5:]}", retry_at=again, fails=rec.get("fails", 0) + 1)
         else:
-            rec.update(last_started=now, last_finished=time.time(), result=result, retry_at=0)
+            rec.update(last_started=now, last_finished=time.time(), result=result, retry_at=0, fails=0)
     update_status(record)
     log(f"{job.title}: {result} ({(time.time() - now) / 60:.0f} min)")
     return updated
@@ -462,25 +467,60 @@ def campaign_lines(m: markets.Market, now: float) -> list[str]:
     return ["", "Lead campaign under way (the robot stays on it every evening until it is finished):"] + out if out else []
 
 
+def outreach_dbs(m: markets.Market) -> list[Path]:
+    """The e-mail memory of each Gmail account (scripts/local_run.py account_db): outreach-in.sqlite, -2, -3."""
+    base = DATA / m.outreach_db
+    return [p for p in [base] + [base.with_name(f"{base.stem}-{i}{base.suffix}") for i in (2, 3)] if p.exists()]
+
+
 def email_counts(now: float, m: markets.Market | None = None) -> dict:
+    """The e-mails of all Gmail accounts together (and per account: sent today, in the last 24 hours)."""
     m = m or markets.MARKETS["us"]
-    db = DATA / m.outreach_db
-    if not db.exists():
+    dbs = outreach_dbs(m)
+    if not dbs:
         return {}
-    try:
-        con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
-        today = datetime.fromtimestamp(now, m.tz).date().isoformat()
-        one = lambda sql, *a: con.execute(sql, a).fetchone()[0] or 0  # noqa: E731
-        out = {"today": one("SELECT COUNT(*) FROM sends WHERE day=? AND status='sent'", today),
-               "all": one("SELECT COUNT(*) FROM sends WHERE status='sent'"),
-               "first": one("SELECT COUNT(*) FROM sends WHERE status='sent' AND step=1"),
-               "bounced": one("SELECT COUNT(*) FROM sends WHERE status IN ('bounced','invalid')"),
-               "days": one("SELECT COUNT(DISTINCT day) FROM sends WHERE status='sent' AND day < ?", today),
-               "replies": dict(con.execute("SELECT kind, COUNT(*) FROM replies GROUP BY kind").fetchall())}
-        con.close()
-        return out
-    except sqlite3.Error:
-        return {}
+    today = datetime.fromtimestamp(now, m.tz).date().isoformat()
+    out = {"today": 0, "all": 0, "first": 0, "bounced": 0, "days": 0, "last24": 0, "replies": {}, "accounts": [],
+           "plan_started": 0.0}
+    for i, db in enumerate(dbs, start=1):
+        try:
+            con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+            one = lambda sql, *a: con.execute(sql, a).fetchone()[0] or 0  # noqa: E731
+            today_n, last24 = (one("SELECT COUNT(*) FROM sends WHERE day=? AND status='sent'", today),
+                               one("SELECT COUNT(*) FROM sends WHERE sent_at>=? AND status='sent'", now - 86400))
+            out["today"] += today_n
+            out["last24"] += last24
+            out["all"] += one("SELECT COUNT(*) FROM sends WHERE status='sent'")
+            out["first"] += one("SELECT COUNT(*) FROM sends WHERE status='sent' AND step=1")
+            out["bounced"] += one("SELECT COUNT(*) FROM sends WHERE status IN ('bounced','invalid')")
+            out["days"] = max(out["days"], one("SELECT COUNT(DISTINCT day) FROM sends WHERE status='sent' AND day < ?", today))
+            for kind, n in con.execute("SELECT kind, COUNT(*) FROM replies GROUP BY kind").fetchall():
+                out["replies"][kind] = out["replies"].get(kind, 0) + n
+            if i == 1:
+                row = con.execute("SELECT value FROM meta WHERE key='plan_started'").fetchone()
+                out["plan_started"] = float(json.loads(row[0])) if row else 0.0
+            out["accounts"].append((i, today_n, last24))
+            con.close()
+        except (sqlite3.Error, ValueError, TypeError):
+            continue
+    return out
+
+
+def plan_text(e: dict, started: float, now: float) -> str:
+    """Where the sending plan stands, for each Gmail account (leadgen/outreach/plan.py)."""
+    from leadgen.outreach import plan as sending_plan
+
+    if not started:
+        return "Sending plan: starts with the next e-mail run"
+    hours = (now - started) / 3600
+    then = e.get("plan_then") or None
+    cur = sending_plan.current(e["plan"], then, hours)
+    if cur is None:
+        return f"Sending plan: finished ({hours:.0f} hours since it started)"
+    block, length, count = cur
+    nxt = round(sending_plan.allowed(e["plan"], then, hours + 24) - sending_plan.allowed(e["plan"], then, hours))
+    return (f"Sending plan: hour {hours:.0f}, block {block} ({count} e-mails in {length:g} hours); about {nxt} in the "
+            f"next 24 hours, per Gmail account (never more than {e.get('max_per_24h', 450)} in 24 hours)")
 
 
 def email_settings(m: markets.Market | None = None) -> dict:
@@ -612,12 +652,20 @@ def status_text(now: float | None = None) -> str:
     em = email_counts(now, m)
     head = f"E-mails (sending PAUSED in config/{m.code}/_base.toml)" if paused else "E-mails"
     if em:
-        cap = daily_limit(em["days"], e_cfg)
         r = em["replies"]
-        top = e_cfg.get("max_per_day", 40)
-        lines += ["", f"{head}: {em['today']} sent today (today's limit {cap}, rising slowly to {top}), {em['all']} in all "
-                      f"({em['first']} first e-mails); bounced {em['bounced']}; replies: interested {r.get('positive', 0)}, "
-                      f"not interested {r.get('negative', 0)}, other {r.get('other', 0)}"]
+        if e_cfg.get("plan"):
+            lines += ["", f"{head}: {em['today']} sent today, {em['last24']} in the last 24 hours, {em['all']} in all "
+                          f"({em['first']} first e-mails); bounced {em['bounced']}; replies: interested "
+                          f"{r.get('positive', 0)}, not interested {r.get('negative', 0)}, other {r.get('other', 0)}",
+                      "  " + plan_text(e_cfg, em["plan_started"], now)]
+            if len(em["accounts"]) > 1:
+                lines += [f"  Gmail account {i}: {t} sent today, {d} in the last 24 hours" for i, t, d in em["accounts"]]
+        else:
+            cap = daily_limit(em["days"], e_cfg)
+            top = e_cfg.get("max_per_day", 40)
+            lines += ["", f"{head}: {em['today']} sent today (today's limit {cap}, rising slowly to {top}), {em['all']} "
+                          f"in all ({em['first']} first e-mails); bounced {em['bounced']}; replies: interested "
+                          f"{r.get('positive', 0)}, not interested {r.get('negative', 0)}, other {r.get('other', 0)}"]
     elif paused:
         lines += ["", f"{head}: none sent yet"]
     return "\n".join(lines)

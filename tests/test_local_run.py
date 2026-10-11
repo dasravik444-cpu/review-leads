@@ -86,6 +86,10 @@ def test_india_market_office_hours_cities_and_files(monkeypatch, tmp_path):
     assert not lr.working_hours(datetime(2026, 10, 12, 21, 0, tzinfo=ist))[0]                 # not at night
     assert lr.working_hours(datetime(2026, 10, 12, 7, 0, tzinfo=ist))[0]                       # from 7 AM
     assert not lr.working_hours(datetime(2026, 10, 12, 6, 30, tzinfo=ist))[0]                 # not before
+    # e-mails: around the clock, by the sending plan (WhatsApp keeps the daytime hours above)
+    assert lr.email_time(datetime(2026, 10, 12, 3, 0, tzinfo=ist))[0]
+    us = lr.markets.MARKETS["us"]
+    assert us.is_email_time(datetime(2026, 10, 12, 3, 0, tzinfo=ist)) == us.is_working_time(datetime(2026, 10, 12, 3, 0, tzinfo=ist))
     assert lr.fleet()[:5] == ["bengaluru", "kolkata", "chennai", "delhi", "mumbai"]
     assert lr.conf("kolkata") == "config/in/kolkata.toml"
     assert all((ROOT / lr.conf(c)).is_file() for c in lr.fleet())
@@ -93,7 +97,7 @@ def test_india_market_office_hours_cities_and_files(monkeypatch, tmp_path):
     assert lr.attachment().name == "pitch-in.pdf"                    # the India PDF, not the US one
     calls = []
     monkeypatch.setattr(lr, "leadgen", lambda *a: calls.append(a) or 0)
-    monkeypatch.setattr(lr, "working_hours", lambda: (True, "Monday 11:00 in India"))
+    monkeypatch.setattr(lr, "email_time", lambda: (True, "Monday 11:00 in India"))
     args = {"dry_run": True, "now": False, "check": False, "max": None, "no_pdf": False, "copy_to": ""}
     lr.cmd_emails(type("A", (), args)())
     (cmd,) = calls
@@ -229,7 +233,7 @@ def test_one_job_at_a_time_and_emails_paced_by_default(tmp_path, monkeypatch):
         assert "e-mail sending (typed by hand, since" in (tmp_path / "robot.lock").read_text()
     calls = []
     monkeypatch.setattr(lr, "leadgen", lambda *a: calls.append(a) or 0)
-    monkeypatch.setattr(lr, "working_hours", lambda: (True, "Monday 10:00 in Chicago"))
+    monkeypatch.setattr(lr, "email_time", lambda: (True, "Monday 10:00 in Chicago"))
     args = {"dry_run": False, "now": False, "check": False, "max": None, "no_pdf": False, "copy_to": ""}
     run = lambda **k: lr.cmd_emails(type("A", (), {**args, **k})())  # noqa: E731
     run()
@@ -264,7 +268,7 @@ def test_hunt_starts_with_the_city_that_has_most_businesses_to_look_at(tmp_path,
 def test_a_test_email_lists_what_was_sent_and_claims_no_more_than_gmail_said(tmp_path, monkeypatch, capsys):
     lr = local_run()
     monkeypatch.setattr(lr, "DATA", tmp_path)
-    monkeypatch.setattr(lr, "working_hours", lambda: (True, "Friday 11:38 in Chicago"))
+    monkeypatch.setattr(lr, "email_time", lambda: (True, "Friday 11:38 in Chicago"))
 
     def fake_leadgen(*args, result="sent"):
         with open(os.environ["OUTREACH_SENT_CSV"], "w", encoding="utf-8") as fh:
@@ -331,3 +335,45 @@ def test_the_tablet_is_told_which_pdf_goes_into_the_whatsapp_chats(tmp_path, mon
     monkeypatch.setattr(lr, "attachment", lambda: lr.ROOT / "data" / "attachment-in.pdf")    # your copy once imported
     monkeypatch.setattr(lr.Path, "is_file", lambda self: True)
     assert lr.cmd_whatsapp(args) == 0 and capsys.readouterr().out.split("\t")[0] == "data/attachment-in.pdf"
+
+
+def test_two_gmail_accounts_send_at_the_same_time_each_with_its_own_memory(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("MARKET", "in")
+    lr = local_run()
+    monkeypatch.setattr(lr, "DATA", tmp_path)
+    monkeypatch.setattr(lr, "email_time", lambda: (True, "Sunday 20:00 in India"))
+    for k, v in {"OUTREACH_GMAIL_ADDRESS": "one@gmail.com", "OUTREACH_GMAIL_APP_PASSWORD": "aaaa",
+                 "OUTREACH_GMAIL_ADDRESS_2": "two@gmail.com", "OUTREACH_GMAIL_APP_PASSWORD_2": "bbbb"}.items():
+        monkeypatch.setenv(k, v)
+    monkeypatch.delenv("OUTREACH_NOTIFY_EMAIL", raising=False)
+    started = []
+
+    class FakeProc:
+        def __init__(self, cmd, cwd=None, env=None, stdout=None, stderr=None):
+            started.append((cmd, env))
+            stdout.write('{"status": "ok"}\n')
+            with open(env["OUTREACH_SENT_CSV"], "w", encoding="utf-8") as fh:
+                fh.write("Lead ID,Business,To,Result,Subject\n")
+                fh.write(f"BLR-1,Cafe,x@{env['OUTREACH_GMAIL_ADDRESS'].split('@')[0]}.in,sent,Hi\n")
+
+        def wait(self):
+            return 0
+    monkeypatch.setattr(lr.subprocess, "Popen", FakeProc)
+    args = {"dry_run": False, "now": False, "check": False, "max": None, "no_pdf": True, "copy_to": "", "account": 0}
+    assert lr.cmd_emails(type("A", (), args)()) == 0
+    (cmd1, env1), (cmd2, env2) = started                     # both started before either is waited for
+    assert env1["OUTREACH_GMAIL_ADDRESS"] == "one@gmail.com" and env2["OUTREACH_GMAIL_APP_PASSWORD"] == "bbbb"
+    assert cmd1[cmd1.index("--db") + 1] == str(tmp_path / "outreach-in.sqlite")             # account 1: as before
+    assert cmd2[cmd2.index("--db") + 1] == str(tmp_path / "outreach-in-2.sqlite")
+    assert cmd1[cmd1.index("--lane") + 1] == "1/2" and "--no-whatsapp" not in cmd1           # WhatsApp: account 1
+    assert ["--lane", "2/2", "--no-whatsapp", "--tab-suffix", " 2"] == cmd2[cmd2.index("--lane"):cmd2.index("--lane") + 5]
+    assert env2["OUTREACH_NOTIFY_EMAIL"] == "one@gmail.com"                                  # reply alerts: account 1
+    out = capsys.readouterr().out
+    assert "=== Gmail account 2 (two@gmail.com) ===" in out and "x@two.in" in out and "from two@gmail.com" in out
+    # one account only (a test e-mail from the second one): its own memory, its share, its credentials
+    calls = []
+    monkeypatch.setattr(lr, "leadgen", lambda *a: calls.append((a, os.environ["OUTREACH_GMAIL_ADDRESS"])) or 0)
+    assert lr.cmd_emails(type("A", (), {**args, "account": 2, "max": 1})()) == 0
+    (cmd, addr), = calls
+    assert addr == "two@gmail.com" and cmd[cmd.index("--db") + 1].endswith("outreach-in-2.sqlite") and "2/2" in cmd
+    assert lr.cmd_emails(type("A", (), {**args, "account": 3})()) == 2

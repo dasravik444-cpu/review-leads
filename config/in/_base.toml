@@ -122,21 +122,25 @@ website = ""
 notify_email = ""
 
 [outreach.email]
-# On since 11 October 2026. Every day: restaurants, cafés, salons and gyms are open on Sundays too.
+# On since 11 October 2026. Every day, every hour, around the clock.
 enabled = true
-# The Gmail is more than a year old (your word, 11 October 2026): 50 a day for 3 sending days, then 75, then 100
-# (follow-ups included). More than about 100-150 a day of cold e-mail from one free Gmail risks the account
-# (docs/LOCAL.md, "How many e-mails a day"). Sending stops by itself if more than 5% bounce.
-start_per_day = 50
-step = 25
-step_every_days = 3
-max_per_day = 100
-max_per_run = 12           # one run an hour, 07:05 - 18:05: 100 fit into the day
-min_gap_seconds = 60       # 1 - 2.5 minutes between two e-mails, so no burst
-max_gap_seconds = 150
-max_bounces_per_day = 5
-window_start = "07:00"
-window_end = "18:30"
+# Your sending plan (11 October 2026), for EACH Gmail account in settings.txt, counted from its first e-mail run
+# after the update (hours from then -> e-mails in those hours):
+#   0-6: 50 | 6-12: 75 | 12-18: 100 | 18-24: 100 | 24-36: 100 | 36-48: 120 | 48-60: 125 | 60-72: 150
+#   then 200 every 12 hours.
+# Follow-ups are part of these numbers. A run the robot missed (it searches for leads at night) is made up by the
+# next ones. Never more than max_per_24h from one account in any 24 hours: Gmail stops an account for a day at about
+# 500. Sending also pauses by itself when Gmail answers "limit" or "blocked", or too many e-mails bounce.
+plan = [[6, 50], [6, 75], [6, 100], [6, 100], [12, 100], [12, 120], [12, 125], [12, 150]]
+plan_then = [12, 200]
+max_per_24h = 450
+max_per_run = 40           # e-mails in one hourly run at most (catching up after the night's lead search)
+min_gap_seconds = 30       # half a minute to a minute and a half between two e-mails
+max_gap_seconds = 90
+run_budget_minutes = 50    # a run stops in time for the next hour's
+max_bounces_per_day = 10   # more bounced addresses than this in a day: sending pauses until tomorrow
+window_start = "00:00"
+window_end = "23:59"
 days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 follow_up_days = [3, 7]
 footer = """{sender_business}

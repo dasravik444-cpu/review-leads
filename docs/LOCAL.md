@@ -64,7 +64,7 @@ unless `settings` says `MARKET=us`; each market has its own cities, its own tabs
 | When (India time) | India (the default) | US (`MARKET=us`) |
 |---|---|---|
 | newest version (kept only if it starts cleanly) | 06:30 | 11:00 |
-| e-mails: first e-mails with the PDF, follow-ups, replies and bounces; fills the WhatsApp Queue | every hour 07:05 - 18:05, every day | every hour 09:35 - 15:35 Chicago time, Monday to Friday (20:05 - 02:05 India time; from 1 November 21:05 - 03:05) |
+| e-mails: first e-mails with the PDF, follow-ups, replies and bounces; fills the WhatsApp Queue | every hour, around the clock (00:05 - 23:05), by the sending plan | every hour 09:35 - 15:35 Chicago time, Monday to Friday (20:05 - 02:05 India time; from 1 November 21:05 - 03:05) |
 | lead search: the city whose campaign is under way (else the next one), then 30 minutes of e-mail hunt (Austin gave 2,171 businesses) | 01:00 (at night, so the new leads are in the Sheet before the 7 AM e-mails), up to 3 hours (about 1,000 businesses a day; it stops sooner when the day's share is done) | 13:00, 1 hour |
 | an hour more of e-mail hunt for businesses of earlier cities that still have no e-mail | 04:30 | 17:30 |
 | a backup of its memory into the tablet's Documents folder (`review-leads-backup`, last 7 days) | 00:30 | 00:30 |
@@ -79,19 +79,32 @@ cities take about 1,000 businesses a day, as many days as that needs (a city wit
 `robot status` shows the campaign under way: which day, how much of the city is searched, and how many businesses of
 these kinds the open map data has there. `ROBOT_LEAD_MINUTES=240` in `settings` gives the lead search more time.
 
-**How many e-mails a day.** India (the Gmail is more than a year old): 50 a day for 3 sending days, then 75 for 3,
-then 100, follow-ups included, spread over the hourly runs 1 - 2.5 minutes apart (`[outreach.email]` in
-`config/in/_base.toml`). The US: 15 a day, rising by 5 every 3 sending days to 40. Why not 500: a free Gmail account
-stops sending for 24 hours at about 500 a day, Google's Gmail policy forbids unsolicited commercial mail, and it
-judges by how recipients react (spam reports), not by a fixed number: more cold e-mail from one personal address
-means more reports and a higher risk of losing the account (and its inbox). For several hundred a day the safer
-way is Google Workspace on your own domain (aurenflow.in, say): several mailboxes, each sending about 50 - 100 a day,
-with SPF, DKIM and DMARC set up. Sending also stops by itself when more than 5% bounce, or after 5 bounces in a day.
+**How many e-mails a day.** India follows your sending plan (11 October 2026), for each Gmail account, counted from
+its first e-mail run after the update: 50 in the first 6 hours, 75 in the next 6, then 100, 100 (325 in the first
+24 hours); 100 and 120 in the next two 12 hours; 125 and 150 in the two after; then 200 every 12 hours (400 a day).
+Follow-ups count in these numbers. The robot sends every hour around the clock; the runs it misses while it searches
+for leads at night are made up by the next ones. `robot status` shows where the plan stands. The US: 15 a day,
+rising by 5 every 3 sending days to 40.
+
+The brakes: never more than 450 from one account in any 24 hours (a free Gmail account is stopped for a day at about
+500); sending pauses by itself when Gmail answers "limit" (a day) or "blocked" (two days), when more than 5% bounce,
+or after 10 bounces in a day. The risk: Google's Gmail policy forbids unsolicited commercial mail and judges by how
+recipients react (spam reports), not by a number; the more cold e-mail one personal address sends, the higher the
+risk of losing the account and its inbox. Watch the bounces and replies in `robot status` in the first days.
+
+**More Gmail accounts.** Up to three: in `settings`, fill `OUTREACH_GMAIL_ADDRESS_2` and
+`OUTREACH_GMAIL_APP_PASSWORD_2` (and `_3`), each with an app password made while signed in to that account. Each
+account takes its own share of the businesses (by their e-mail domain, so no business hears from two accounts), runs
+its own sending plan, keeps its own memory (`data/outreach-in-2.sqlite`) and its own tab (**India Outreach 2**);
+they send at the same time. Replies are read in every account's inbox; alerts go to the first account (or
+`OUTREACH_NOTIFY_EMAIL`). The WhatsApp Queue stays the first account's job. `check` tests every account's login;
+`emails --account 2 --max 1 --copy-to you@gmail.com` sends one test e-mail from the second.
 
 `robot status` shows what it does,
 the last and next run of each job, and per city how many businesses it found and how many have an e-mail and a
 phone; its first line is the switch (`Switch: ON`). `robot log` shows today's log, `robot off` stops it (the job it
-is on saves first, up to 3 minutes, and runs again when the robot is back on), `robot run leads` runs a job now. It starts again by itself after a restart of the tablet (Termux:Boot app) and within 15 minutes if
+is on saves first, up to 3 minutes, and runs again when the robot is back on), `robot run leads` runs a job now. A lead
+search or e-mail hunt that fails (no internet at 1 AM, say) runs again by itself 30 minutes later, twice. It starts again by itself after a restart of the tablet (Termux:Boot app) and within 15 minutes if
 Android closes it (Termux:API app); both apps are already there for Plant Parlour. Keep the tablet charging and on
 Wi-Fi, and Termux on **Battery: Unrestricted** and **Autostart: on** (Settings → Apps → Termux). More than one city a
 day: `ROBOT_CITIES_PER_DAY=2` in `settings`; a job off: `ROBOT_EMAILS=no` (or `ROBOT_LEADS=no`). Sending can also

@@ -235,22 +235,23 @@ def test_india_timetable_lead_search_at_night_and_emails_from_7_am(tmp_path, mon
     r = robot(tmp_path, monkeypatch)
     assert r.market({}).code == "in" and r.market({"MARKET": "us"}).code == "us"   # settings.txt wins over the default
     # Sunday 11 Oct 2026: the backup at 00:30, the lead search at 01:00, then the e-mail hunt at 04:30
-    done = {"backup": {"last_started": at(IST, 2026, 10, 11, 0, 30)}}
+    done = {"backup": {"last_started": at(IST, 2026, 10, 11, 0, 30)}, "emails": {"last_started": at(IST, 2026, 10, 11, 0, 6)}}
     assert r.pick_due(at(IST, 2026, 10, 11, 0, 50), {"jobs": done}, {}) is None
     assert r.pick_due(at(IST, 2026, 10, 11, 1, 0, 30), {"jobs": done}, {}).name == "leads"
     done["leads"] = {"last_started": at(IST, 2026, 10, 11, 1, 0)}
+    done["emails"] = {"last_started": at(IST, 2026, 10, 11, 4, 6)}
     assert r.pick_due(at(IST, 2026, 10, 11, 4, 31), {"jobs": done}, {}).name == "hunt"
     done["hunt"] = {"last_started": at(IST, 2026, 10, 11, 4, 31)}
-    # the update at 06:30, then e-mails every hour from 07:05 (every day in India, Sunday too)
+    # the update at 06:30; e-mails every hour around the clock (the sending plan), Sunday too
+    done["emails"] = {"last_started": at(IST, 2026, 10, 11, 6, 5)}
     assert r.pick_due(at(IST, 2026, 10, 11, 6, 31), {"jobs": done}, {}).name == "update"
     done["update"] = {"last_started": at(IST, 2026, 10, 11, 6, 31)}
     assert r.pick_due(at(IST, 2026, 10, 11, 7, 0), {"jobs": done}, {}) is None
     assert r.pick_due(at(IST, 2026, 10, 11, 7, 6), {"jobs": done}, {}).name == "emails"
     assert r.pick_due(at(IST, 2026, 10, 11, 7, 6), {"jobs": done}, {"MARKET": "us"}) is None   # US: not now
     timetable = r.jobs({})
-    assert timetable["emails"].times == tuple(f"{h:02d}:05" for h in range(7, 19))
-    # the next run after the evening's last one: tomorrow 07:05
-    assert r.next_slot(timetable["emails"], at(IST, 2026, 10, 11, 18, 30)) == datetime(2026, 10, 12, 7, 5, tzinfo=IST)
+    assert timetable["emails"].times == tuple(f"{h:02d}:05" for h in range(24))
+    assert r.next_slot(timetable["emails"], at(IST, 2026, 10, 11, 23, 30)) == datetime(2026, 10, 12, 0, 5, tzinfo=IST)
     # up to 3 hours of lead search a day in India (it stops sooner once the day's share is done), 1 hour in the US
     assert r.command(timetable["leads"], {})[0][-4:] == ["--minutes", "180", "--hunt-minutes", "30"]
     assert r.command(timetable["leads"], {"ROBOT_LEAD_MINUTES": "90"})[1] == 90 + 40 + 20
@@ -302,3 +303,46 @@ def test_status_shows_the_city_campaign_under_way(tmp_path, monkeypatch):
     text = r.status_text(now)
     assert ("Lead campaign under way (the robot stays on it every evening until it is finished):\n"
             "  bengaluru: day 3 of 7, 40% of the city searched, 1,234 businesses of these kinds on the map (open data)") in text
+
+
+def test_a_failed_lead_search_runs_again_twice_then_waits_for_tomorrow(tmp_path, monkeypatch):
+    r = robot(tmp_path, monkeypatch)
+    (tmp_path / "data").mkdir()
+    monkeypatch.setattr(r, "run_command", lambda *a, **k: 1)          # the lead search fails
+    leads = r.jobs({})["leads"]
+    for attempt in (1, 2):
+        r.run_job(leads, {})
+        rec = r.load_status()["jobs"]["leads"]
+        assert rec["fails"] == attempt and rec["retry_at"] > time.time() + 25 * 60 and "again at" in rec["result"]
+        assert "last_started" not in rec                                # the day's slot stays due
+    r.run_job(leads, {})
+    rec = r.load_status()["jobs"]["leads"]
+    assert rec["fails"] == 0 and rec["last_started"] and rec["result"].startswith("failed")   # tomorrow again
+    monkeypatch.setattr(r, "run_command", lambda *a, **k: 0)
+    r.run_job(r.jobs({})["emails"], {})                               # e-mails are not retried this way
+    assert "fails" not in r.load_status()["jobs"]["emails"] or r.load_status()["jobs"]["emails"]["fails"] == 0
+
+
+def test_status_shows_the_sending_plan_and_each_gmail_account(tmp_path, monkeypatch):
+    monkeypatch.setenv("MARKET", "in")
+    r = robot(tmp_path, monkeypatch)
+    from leadgen.outreach.store import OutreachStore
+
+    (tmp_path / "data").mkdir()
+    now = datetime(2026, 10, 12, 4, 0, tzinfo=IST).timestamp()
+    for name, n in (("outreach-in.sqlite", 3), ("outreach-in-2.sqlite", 2)):
+        store = OutreachStore(str(tmp_path / "data" / name))
+        for k in range(n):
+            store.conn.execute("INSERT INTO sends(email,lead_key,step,sent_at,day,status) VALUES(?,?,1,?,'2026-10-12','sent')",
+                               (f"a{k}@b.in", f"k{k}", now - 600))
+        if name == "outreach-in.sqlite":
+            store.set("plan_started", now - 7 * 3600)               # 7 hours into the plan
+        store.conn.commit()
+    e = {"enabled": True, "plan": [[6, 50], [6, 75]], "plan_then": [12, 200], "max_per_24h": 450}
+    monkeypatch.setattr(r, "email_settings", lambda *_: e)
+    r.save_status({"scheduler": {"heartbeat": now}})
+    text = r.status_text(now)
+    assert "E-mails: 5 sent today, 5 in the last 24 hours, 5 in all (5 first e-mails)" in text
+    assert ("Sending plan: hour 7, block 2 (75 e-mails in 6 hours); about 379 in the next 24 hours, per Gmail account "
+            "(never more than 450 in 24 hours)") in text
+    assert "Gmail account 1: 3 sent today" in text and "Gmail account 2: 2 sent today" in text

@@ -165,8 +165,14 @@ def next_cities(n: int, cities: list[str] | None = None, done_elsewhere: list[st
 
 
 def working_hours(now: datetime | None = None) -> tuple[bool, str]:
-    """The businesses' office hours in the market (US: Chicago 08:30-16:30 Mon-Fri; India: 10:00-18:30 Mon-Sat)."""
+    """The businesses' office hours in the market, for WhatsApp (US: Chicago 08:30-16:30 Mon-Fri; India: 7 AM -
+    6:30 PM every day)."""
     return market().is_working_time(now)
+
+
+def email_time(now: datetime | None = None) -> tuple[bool, str]:
+    """When e-mails may go out (India: around the clock, by the sending plan; US: its office hours)."""
+    return market().is_email_time(now)
 
 
 def leadgen(*args: str) -> int:
@@ -185,9 +191,17 @@ def cmd_check(_a) -> int:
     print(f"Market: {market().name} (MARKET in settings.txt)")
     code = leadgen("doctor", "--config", conf(fleet()[0]), "--db", str(DATA / "check.sqlite"), "--require-sheet",
                    "--sheet-test")
-    print("\nGmail: preparing one e-mail (nothing is sent) to test the login...")
-    code2 = leadgen("outreach", "--config", conf("outreach"), "--db", str(DATA / market().outreach_db),
-                    "--mode", "dry-run", "--max-emails", "1")
+    accounts = gmail_accounts() or [(os.environ.get("OUTREACH_GMAIL_ADDRESS", ""), "")]
+    code2 = 0
+    for i, (addr, pw) in enumerate(accounts, start=1):
+        print(f"\nGmail{f' account {i} ({addr})' if len(accounts) > 1 else ''}: preparing one e-mail (nothing is sent) "
+              "to test the login...")
+        if pw:
+            os.environ.update(OUTREACH_GMAIL_ADDRESS=addr, OUTREACH_GMAIL_APP_PASSWORD=pw)
+        code2 = max(code2, leadgen("outreach", "--config", conf("outreach"), "--db", str(account_db(i)),
+                                   "--mode", "dry-run", "--max-emails", "1", *account_args(i, len(accounts))))
+    if accounts and accounts[0][1]:
+        os.environ.update(OUTREACH_GMAIL_ADDRESS=accounts[0][0], OUTREACH_GMAIL_APP_PASSWORD=accounts[0][1])
     return code or code2
 
 
@@ -297,34 +311,107 @@ def attachment() -> Path:
     return public
 
 
+def gmail_accounts() -> list[tuple[str, str]]:
+    """The Gmail accounts that send: OUTREACH_GMAIL_ADDRESS / OUTREACH_GMAIL_APP_PASSWORD in settings.txt, then the
+    same with _2 and _3 at the end for more accounts (each one sends its own share; docs/LOCAL.md)."""
+    out = []
+    for suffix in ("", "_2", "_3"):
+        addr = os.environ.get(f"OUTREACH_GMAIL_ADDRESS{suffix}", "").strip()
+        pw = os.environ.get(f"OUTREACH_GMAIL_APP_PASSWORD{suffix}", "").strip()
+        if addr and pw:
+            out.append((addr, pw))
+    return out
+
+
+def account_db(i: int) -> Path:
+    """The e-mail memory of Gmail account i (1: data/outreach-in.sqlite, 2: data/outreach-in-2.sqlite, ...)."""
+    base = DATA / market().outreach_db
+    return base if i == 1 else base.with_name(f"{base.stem}-{i}{base.suffix}")
+
+
+def account_args(i: int, n: int) -> list[str]:
+    """What account i of n does besides sending: its share of the businesses, its own tabs; WhatsApp is account 1's."""
+    if n <= 1:
+        return []
+    return ["--lane", f"{i}/{n}"] + (["--no-whatsapp", "--tab-suffix", f" {i}"] if i > 1 else [])
+
+
+def run_accounts(lanes: list[tuple[int, str, list[str], dict]]) -> int:
+    """Run the e-mail runs of several Gmail accounts at the same time (each sends its own share), then show what each
+    did. One account: as before, its output straight on the screen."""
+    if len(lanes) == 1:
+        _, _, args, env = lanes[0]
+        saved = {k: os.environ.get(k) for k in env}
+        os.environ.update(env)
+        try:
+            return leadgen(*args)
+        finally:                       # this account's settings only for its run
+            for k, v in saved.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+    procs = []
+    for i, addr, args, env in lanes:
+        log = DATA / f"emails-account-{i}.log"
+        fh = open(log, "w", encoding="utf-8")
+        print(f">>> Gmail account {i} ({addr}): " + " ".join(args), flush=True)
+        procs.append((i, addr, log, fh, subprocess.Popen([sys.executable, "-m", "leadgen", *args], cwd=ROOT,
+                                                         env={**os.environ, **env}, stdout=fh, stderr=subprocess.STDOUT)))
+    worst = 0
+    for i, addr, log, fh, proc in procs:
+        worst = max(worst, proc.wait())
+        fh.close()
+        print(f"\n=== Gmail account {i} ({addr}) ===")
+        print(log.read_text(encoding="utf-8", errors="replace").rstrip())
+    return worst
+
+
 def cmd_emails(a) -> int:
     m = market()
-    ok, when = working_hours()
+    ok, when = email_time()
     if not ok and not a.now and not a.check:
         print(f"It is {when}: outside office hours in {m.name}.\n"
               f"E-mails that arrive at night look like spam. Run this again then ({m.india_time}),\n"
               "or add --now to send anyway.")
         return 0
-    args = ["outreach", "--config", conf("outreach"), "--db", str(DATA / m.outreach_db),
-            "--mode", "dry-run" if a.dry_run else "live"]
-    # Without --max, each run sends its share of today's limit (15 a day at first, rising slowly to 40), a few
-    # minutes apart, spread over the businesses' working day: the robot runs this every hour.
-    if a.check:
-        args += ["--max-emails", "0"]
-    elif a.max is not None:
-        args += ["--max-emails", str(a.max)]
-    if not a.no_pdf:
-        args += ["--attach", str(attachment())]
-    if a.copy_to:
-        args += ["--bcc", a.copy_to]
-    sent = DATA / "last-sent.csv"
-    sent.unlink(missing_ok=True)
-    os.environ["OUTREACH_SENT_CSV"] = str(sent)
-    code = leadgen(*args)
-    if sent.is_file():
+    accounts = gmail_accounts() or [(os.environ.get("OUTREACH_GMAIL_ADDRESS", ""), "")]
+    n, only = len(accounts), getattr(a, "account", 0) or 0
+    if only and not 1 <= only <= n:
+        print(f"There is no Gmail account {only}: settings.txt has {n}.")
+        return 2
+    lanes = []
+    for i, (addr, pw) in enumerate(accounts, start=1):
+        if only and i != only:
+            continue
+        # Without --max, each run sends what the sending plan (or today's limit) allows now, a minute or two apart:
+        # the robot runs this every hour.
+        args = ["outreach", "--config", conf("outreach"), "--db", str(account_db(i)),
+                "--mode", "dry-run" if a.dry_run else "live", *account_args(i, n)]
+        if a.check:
+            args += ["--max-emails", "0"]
+        elif a.max is not None:
+            args += ["--max-emails", str(a.max)]
+        if not a.no_pdf:
+            args += ["--attach", str(attachment())]
+        if a.copy_to:
+            args += ["--bcc", a.copy_to]
+        sent = DATA / ("last-sent.csv" if i == 1 else f"last-sent-{i}.csv")
+        sent.unlink(missing_ok=True)
+        env = {"OUTREACH_SENT_CSV": str(sent)}
+        if pw:
+            env.update(OUTREACH_GMAIL_ADDRESS=addr, OUTREACH_GMAIL_APP_PASSWORD=pw)
+        if i > 1 and not os.environ.get("OUTREACH_NOTIFY_EMAIL"):
+            env["OUTREACH_NOTIFY_EMAIL"] = accounts[0][0]      # replies to every account: alerts to the first one
+        lanes.append((i, addr, args, env))
+    code = run_accounts(lanes)
+    for i, addr, _, env in lanes:
+        sent = Path(env["OUTREACH_SENT_CSV"])
+        if not sent.is_file():
+            continue
         with sent.open(encoding="utf-8") as fh:
             rows = list(csv.DictReader(fh))
-        print(f"\nE-mails sent this run ({len(rows)}):")
+        print(f"\nE-mails sent this run ({len(rows)})" + (f" from {addr}" if len(lanes) > 1 else "") + ":")
         for r in rows:
             print(f"  {r['Lead ID']}  {r['Business']}  ->  {r['To']}  [{r['Result']}]  \"{r['Subject']}\"")
         if a.copy_to and any(r["Result"] == "sent" for r in rows):
@@ -481,6 +568,7 @@ def main(argv=None) -> int:
     em.add_argument("--no-pdf", action="store_true", help="first e-mails without the PDF")
     em.add_argument("--copy-to", default="", help="a blind copy of each first e-mail to this address (yours)")
     em.add_argument("--check", action="store_true", help="only read replies and bounces, send nothing (any time)")
+    em.add_argument("--account", type=int, default=0, help="only this Gmail account (1, 2 or 3; default: all)")
     wa = sub.add_parser("whatsapp", help="the WhatsApp Queue: what to send, the next message, a result (sends nothing)")
     wa_sub = wa.add_subparsers(dest="action", required=True)
     wl = wa_sub.add_parser("list", help="the messages waiting")

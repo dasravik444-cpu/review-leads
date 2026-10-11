@@ -670,3 +670,75 @@ def test_the_whatsapp_message_can_be_the_first_emails_words_with_a_whatsapp_endi
                          "you again.")
     assert "e-mail again" not in text and "WhatsApp/phone" not in text
     assert row["Open Chat"].startswith("https://wa.me/919845011111?text=Hello%20Olive%20Bistro%20team")
+
+
+# ------------------------------------------------------------------ the sending plan and several Gmail accounts
+def plan_leads(n=40):
+    return [lead(i, f"Cafe {i}", email=f"hello@cafe{i}.in", priority="High") for i in range(1, n + 1)]
+
+
+def plan_cfg(**email):
+    cfg = cfg_with()
+    cfg["outreach"]["email"].update({"plan": [[6, 12]], "plan_then": [6, 30], "max_per_run": 50, "window_start": "00:00",
+                                     "window_end": "23:59", "days": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"],
+                                     "min_gap_seconds": 20, "max_gap_seconds": 30, **email})
+    return cfg
+
+
+def test_the_sending_plan_sends_each_hours_share_and_makes_up_missed_runs(tmp_path):
+    sess, client = sheet_with(plan_leads())
+    smtp, clock = SmtpWorld(), Clock(ts(2026, 10, 11, 19))
+    store = OutreachStore(str(tmp_path / "o.sqlite"))
+    run = lambda: runner(plan_cfg(), store, client, clock, smtp).run()  # noqa: E731
+    clock.t = ts(2026, 10, 11, 17)
+    runner(plan_cfg(), store, client, clock, smtp, live=False).run()          # a dry run: the plan does not start
+    assert store.get("plan_started") is None and smtp.sent == []
+    clock.t = ts(2026, 10, 11, 19)
+    code, s = run()                                    # hour 0: the first hour's share of 12 in 6 hours
+    assert code == 0 and len(smtp.sent) == 2 and s["daily_limit"] == 12 + 30 * 3
+    clock.t = ts(2026, 10, 11, 20)
+    run()
+    assert len(smtp.sent) == 4                         # the next hour: 2 more
+    clock.t = ts(2026, 10, 11, 23)                     # 2 runs missed (the night's lead search)
+    run()
+    assert len(smtp.sent) == 10                        # made up: the plan's 10 up to the end of hour 5
+    clock.t = ts(2026, 10, 12, 1)                      # hour 6 on: 30 every 6 hours = 5 an hour
+    run()
+    assert len(smtp.sent) == 12 + 5
+    # never more than max_per_24h in any 24 hours, follow-ups included, whatever the plan says
+    store2 = OutreachStore(str(tmp_path / "o2.sqlite"))
+    smtp2, clock2 = SmtpWorld(), Clock(ts(2026, 10, 11, 19))
+    runner(plan_cfg(max_per_24h=3), store2, sheet_with(plan_leads())[1], clock2, smtp2).run()
+    assert len(smtp2.sent) == 2
+    clock2.t = ts(2026, 10, 11, 23)
+    runner(plan_cfg(max_per_24h=3), store2, sheet_with(plan_leads())[1], clock2, smtp2).run()
+    assert len(smtp2.sent) == 3
+
+
+def test_several_gmail_accounts_each_email_their_own_share_and_keep_their_own_tab(tmp_path):
+    from leadgen.outreach.engine import lead_lane
+
+    leads = plan_leads(30)
+    leads.append(lead(31, "Cafe 31 Branch", email="branch@cafe1.in", priority="High"))   # cafe1.in's other address
+    sess, client = sheet_with(leads)
+    clock = Clock(ts(2026, 10, 11, 19))
+    worlds = [SmtpWorld(), SmtpWorld()]
+    for i, world in enumerate(worlds, start=1):
+        store = OutreachStore(str(tmp_path / f"o{i}.sqlite"))
+        cfg = plan_cfg(max_per_run=50, plan=[[1, 40]])
+        runner(cfg, store, client, clock, world, lane=(i, 2), whatsapp=i == 1, tab_suffix="" if i == 1 else " 2").run()
+    first, second = ({m["To"] for m in w.sent} for w in worlds)
+    assert first and second and not first & second                  # no business e-mailed from both accounts
+    assert len(first | second) == 30                                # cafe1.in once only (one per domain)
+    for addr in first:
+        assert lead_lane(next(ld for ld in read_back(sess) if addr in ld.emails), 2) == 1
+    assert {r["Email"] for r in tab(sess, "Outreach")} == first      # each account its own Outreach tab
+    assert {r["Email"] for r in tab(sess, "Outreach 2")} == second
+
+
+def read_back(sess):
+    from leadgen.outreach.leads import parse_lead
+
+    rows = sess.tabs["Leads"]["rows"]
+    cfg = cfg_with()
+    return [ld for ld in (parse_lead(dict(zip(rows[0], r)), i + 2, cfg) for i, r in enumerate(rows[1:])) if ld]

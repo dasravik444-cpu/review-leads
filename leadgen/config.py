@@ -72,6 +72,9 @@ DEFAULTS: dict = {
                   "window_start": "10:00", "window_end": "18:30", "days": ["mon", "tue", "wed", "thu", "fri", "sat"],
                   "skip_dates": [], "follow_up_days": [3, 7], "include_unverified": False, "one_per_domain": True,
                   "pause_bounce_rate": 0.05, "pause_min_sends": 20, "max_bounces_per_day": 3, "run_budget_minutes": 35,
+                  # plan: [[hours, e-mails], ...] then plan_then every [hours, e-mails] (leadgen/outreach/plan.py),
+                  # instead of start_per_day/step; max_per_24h: never more from one account in any 24 hours
+                  "plan": [], "plan_then": [], "max_per_24h": 450,
                   "subjects": [], "first": "", "follow_ups": [], "footer": "", "attachment": ""},
         "whatsapp": {"enabled": True, "start_per_day": 20, "step": 10, "step_every_days": 3, "max_per_day": 50,
                      # include_landlines: also try the other phone numbers (after the mobiles), one at a time
@@ -250,6 +253,12 @@ def _outreach_errors(o: dict) -> list[str]:
     int_in("step_every_days", 1, 30)
     int_in("max_per_day", 1, 400)      # a free Gmail account allows ~500/day; stay well below
     int_in("max_per_run", 1, 50)
+    int_in("max_per_24h", 1, 480)      # Gmail stops a free account for a day at about 500 (follow-ups count)
+    int_in("run_budget_minutes", 5, 55)
+    plan_ok = all(isinstance(b, list) and len(b) == 2 and all(isinstance(x, (int, float)) and not isinstance(x, bool)
+                  and x > 0 for x in b) for b in (e.get("plan") or []) + ([e["plan_then"]] if e.get("plan_then") else []))
+    if not plan_ok:
+        errors.append("outreach.email.plan must be a list of [hours, e-mails] pairs (plan_then one such pair)")
     int_in("max_bounces_per_day", 1, 50)
     int_in("pause_min_sends", 1, 1000)
     try:

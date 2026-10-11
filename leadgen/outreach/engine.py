@@ -11,6 +11,7 @@ import os
 import random
 import re
 import time
+import zlib
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -18,6 +19,7 @@ from .. import country
 from ..enrich.phones import display_phone, parse_phone
 from ..sheets import SheetsClient, SheetsError
 from ..util import fmt_local, get_logger, jdump, local_now
+from . import plan as sending_plan
 from . import templates as T
 from .classify import snippet
 from .inbox import GmailInbox
@@ -43,6 +45,15 @@ def _minutes(hhmm: str) -> int:
     return int(h) * 60 + int(m)
 
 
+def lead_lane(lead: Lead, n: int) -> int:
+    """Which of n Gmail accounts e-mails this business (1..n). Fixed by its e-mail domain, so a business listed twice
+    (one website) always lands with the same account; a free-mail address (gmail.com ...) by the address itself."""
+    addr = (lead.emails or lead.unverified_emails or [lead.key])[0].lower()
+    dom = email_domain(addr)
+    key = addr if not dom or dom in FREE_MAIL else dom
+    return zlib.crc32(key.encode("utf-8")) % n + 1
+
+
 def _id_num(lead_id: str) -> int:
     digits = re.sub(r"\D", "", lead_id or "")
     return int(digits) if digits else 10**9
@@ -51,9 +62,20 @@ def _id_num(lead_id: str) -> int:
 class Outreach:
     def __init__(self, cfg, store, *, client=None, sender=None, inbox=None, live: bool | None = None,
                  max_emails: int | None = None, now_fn=time.time, sleep_fn=time.sleep, rng=None, use_sheet: bool = True,
-                 attach: str | None = None, bcc: str = ""):
+                 attach: str | None = None, bcc: str = "", lane: tuple[int, int] | None = None, whatsapp: bool = True,
+                 tab_suffix: str = ""):
         self.cfg, self.store = cfg, store
         self.o = cfg["outreach"]
+        # Several Gmail accounts (scripts/local_run.py): each one is a "lane" with its own memory (store) and its own
+        # Outreach and Email Preview tabs, and takes only its share of the businesses (lane = (this one, how many)),
+        # so no business is e-mailed from two accounts. The WhatsApp queue and the letters are the first lane's job.
+        self.lane = lane if lane and lane[1] > 1 else None
+        self.whatsapp = whatsapp
+        if tab_suffix:
+            tabs = dict(self.o["tabs"])
+            for k in ("outreach", "preview"):
+                tabs[k] = f"{tabs[k]}{tab_suffix}"
+            self.o = {**self.o, "tabs": tabs}
         # The repository is public: the owner's number and alert address can come from GitHub secrets instead.
         env_sender = {k: os.environ.get(v, "").strip() for k, v in (("phone", "OUTREACH_SENDER_PHONE"),
                                                                     ("notify_email", "OUTREACH_NOTIFY_EMAIL"),
@@ -159,8 +181,9 @@ class Outreach:
                 self.leads = read_leads(self.client, self.cfg["sheets"]["leads_tab"], self.cfg)
                 self.by_key = {lead.key: lead for lead in self.leads}
                 self._sync_dnc(sheet)
-                self._sync_whatsapp(sheet)
-                self._sync_letters(sheet)
+                if self.whatsapp:
+                    self._sync_whatsapp(sheet)
+                    self._sync_letters(sheet)
             except SheetsError as exc:
                 self.notes.append(f"Google Sheet error: {exc}")
                 return 2, self._summary("sheet error")
@@ -168,8 +191,9 @@ class Outreach:
         self._check_inbox()
         self._mark_no_reply()
         self._send_emails()
-        self._whatsapp_queue()
-        self._letters_queue()
+        if self.whatsapp:
+            self._whatsapp_queue()
+            self._letters_queue()
         status = "ok"
         if sheet is not None:
             try:
@@ -335,6 +359,35 @@ class Outreach:
         days = self.store.scalar("SELECT COUNT(DISTINCT day) FROM sends WHERE status='sent' AND day < ?", (today,), 0)
         return min(e["max_per_day"], e["start_per_day"] + e["step"] * (days // e["step_every_days"]))
 
+    def _plan_left(self) -> tuple[int, int] | None:
+        """[outreach.email] plan: (e-mails this account may send now, the plan's e-mails in the next 24 hours); None
+        without a plan. The plan starts with the first run that sees it (a changed plan starts again). Each run may
+        send up to the end of the coming hour; what a missed run did not send is sent by the next ones."""
+        e = self.o["email"]
+        if not e.get("plan"):
+            return None
+        sig = jdump([e["plan"], e.get("plan_then") or []])
+        start = float(self.store.get("plan_started", 0) or 0)
+        if not start or self.store.get("plan_sig") != sig:
+            start = self.now()
+            if self.live:              # a dry run (the login test of  check ) does not start the plan's clock
+                self.store.set("plan_started", start)
+                self.store.set("plan_sig", sig)
+        hours = (self.now() - start) / 3600
+        then = e.get("plan_then") or None
+        sent = self.store.scalar("SELECT COUNT(*) FROM sends WHERE sent_at>=? AND status IN ('sent','invalid')", (start,), 0)
+        left = max(0, math.floor(sending_plan.allowed(e["plan"], then, hours + 1) + 1e-9) - sent)
+        return left, round(sending_plan.allowed(e["plan"], then, hours + 24) - sending_plan.allowed(e["plan"], then, hours))
+
+    def _left_in_24h(self) -> int:
+        """Gmail stops an account for a day at about 500 e-mails in 24 hours (follow-ups count): never near that."""
+        cap = int(self.o["email"].get("max_per_24h") or 0)
+        if cap <= 0:
+            return 10**9
+        sent = self.store.scalar("SELECT COUNT(*) FROM sends WHERE sent_at>=? AND status IN ('sent','invalid')",
+                                 (self.now() - 86400,), 0)
+        return max(0, cap - sent)
+
     def _window(self, local: datetime) -> tuple[bool, str, datetime]:
         e = self.o["email"]
         end = local.replace(hour=_minutes(e["window_end"]) // 60, minute=_minutes(e["window_end"]) % 60, second=0, microsecond=0)
@@ -358,9 +411,14 @@ class Outreach:
             return
         local = self._local()
         today = local.date().isoformat()
-        cap = self._daily_cap(today)
         used = self.store.scalar("SELECT COUNT(*) FROM sends WHERE day=? AND status IN ('sent','invalid')", (today,), 0)
-        remaining = max(0, cap - used)
+        planned = self._plan_left()
+        if planned is None:
+            cap = self._daily_cap(today)
+            remaining = max(0, cap - used)
+        else:
+            remaining, cap = planned          # the plan: what is due now; "daily limit" = its next 24 hours
+        remaining = min(remaining, self._left_in_24h())
         self.cap, self.used_today = cap, used
         if not self.live:
             n = remaining if self.max_emails is None else min(self.max_emails, remaining)
@@ -392,7 +450,7 @@ class Outreach:
             self.code = max(self.code, 2)
             return
         runs_left = max(1, math.ceil((end - local).total_seconds() / 3600))
-        n = min(e["max_per_run"], math.ceil(remaining / runs_left))
+        n = min(e["max_per_run"], remaining if planned is not None else math.ceil(remaining / runs_left))
         if self.max_emails is not None:
             n = min(self.max_emails, remaining)
         batch = self._pick(n)
@@ -441,6 +499,8 @@ class Outreach:
         for lead in sorted(self.leads, key=lambda ld: (0 if ld.opted_in else 1, self._score(ld))):
             if len(out) >= n:
                 break
+            if self.lane and lead_lane(lead, self.lane[1]) != self.lane[0]:
+                continue            # another Gmail account's share
             if self._business_keys(lead) & used_business:
                 continue            # the same business listed twice: one conversation only
             # Only leads never contacted: the sheet's Status is the durable record, so even if the outreach
@@ -688,6 +748,8 @@ class Outreach:
         emailing = {r["lead_key"] for r in self.store.q("SELECT DISTINCT lead_key FROM threads WHERE stage IN ('active','replied','opted_out')")}
         ended = {r["lead_key"] for r in self.store.q(
             "SELECT DISTINCT lead_key FROM threads WHERE stage IN ('completed','no_reply','bounced')")}
+        # ... also those another Gmail account e-mailed without an answer (their status in the Leads tab says so)
+        ended |= {ld.key for ld in self.leads if ld.status.strip().lower() in (STATUS_DONE.lower(), STATUS_BOUNCED.lower())}
         added = 0
         with self.store.tx():
             for lead in sorted(self.leads, key=self._score):

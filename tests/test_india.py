@@ -63,10 +63,15 @@ def test_india_outreach_has_its_own_tabs_rupee_offer_and_runs_every_day():
     assert o["email"]["enabled"] is True                             # on since 11 October 2026
     assert o["email"]["days"] == ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
     e = o["email"]
-    # an old Gmail: 50 a day for 3 sending days, then 75, then 100; 12 hourly runs can carry 100
-    assert (e["start_per_day"], e["step"], e["step_every_days"], e["max_per_day"]) == (50, 25, 3, 100)
-    assert e["max_per_run"] * 12 >= e["max_per_day"]
-    assert e["max_per_run"] * e["max_gap_seconds"] <= e["run_budget_minutes"] * 60      # each run's share fits its time
+    # your sending plan (11 October 2026), per Gmail account: 325 in the first 24 hours, then 220, 275, then 400 a day
+    from leadgen.outreach import plan as P
+
+    totals = [round(P.allowed(e["plan"], e["plan_then"], h)) for h in (6, 12, 18, 24, 48, 72, 96)]
+    assert totals == [50, 125, 225, 325, 545, 820, 1220]
+    assert e["max_per_24h"] == 450                                   # under Gmail's ~500 a day, follow-ups included
+    avg_gap = (e["min_gap_seconds"] + e["max_gap_seconds"]) / 2
+    assert e["max_per_run"] * avg_gap <= e["run_budget_minutes"] * 60     # a full run fits its time (else: next run)
+    assert (e["window_start"], e["window_end"]) == ("00:00", "23:59")                  # around the clock
     w = o["whatsapp"]
     assert w["include_mobiles"] is True and w["include_landlines"] is True     # every phone number is tried
     assert (w["start_per_day"], w["step"], w["step_every_days"], w["max_per_day"]) == (10, 5, 1, 40)
