@@ -68,9 +68,9 @@ def test_india_outreach_has_its_own_tabs_rupee_offer_and_runs_every_day():
 
     totals = [round(P.allowed(e["plan"], e["plan_then"], h)) for h in (6, 12, 18, 24, 48, 72, 96)]
     assert totals == [50, 125, 225, 325, 545, 820, 1220]
-    assert e["max_per_24h"] == 450                                   # under Gmail's ~500 a day, follow-ups included
-    avg_gap = (e["min_gap_seconds"] + e["max_gap_seconds"]) / 2
-    assert e["max_per_run"] * avg_gap <= e["run_budget_minutes"] * 60     # a full run fits its time (else: next run)
+    assert e["max_per_24h"] == 400                                   # your ceiling (Gmail stops at ~500), follow-ups included
+    assert e["min_gap_seconds"] >= 60 and e["spread_minutes"] * 60 <= e["run_budget_minutes"] * 60
+    assert e["max_per_run"] * e["min_gap_seconds"] <= e["run_budget_minutes"] * 60     # a full catch-up run fits too
     assert (e["window_start"], e["window_end"]) == ("00:00", "23:59")                  # around the clock
     w = o["whatsapp"]
     assert w["include_mobiles"] is True and w["include_landlines"] is True     # every phone number is tried

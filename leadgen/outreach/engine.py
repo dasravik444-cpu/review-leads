@@ -10,6 +10,7 @@ import math
 import os
 import random
 import re
+import sqlite3
 import time
 import zlib
 from datetime import datetime, timedelta
@@ -63,13 +64,16 @@ class Outreach:
     def __init__(self, cfg, store, *, client=None, sender=None, inbox=None, live: bool | None = None,
                  max_emails: int | None = None, now_fn=time.time, sleep_fn=time.sleep, rng=None, use_sheet: bool = True,
                  attach: str | None = None, bcc: str = "", lane: tuple[int, int] | None = None, whatsapp: bool = True,
-                 tab_suffix: str = ""):
+                 tab_suffix: str = "", also_stores: list[str] | tuple = ()):
         self.cfg, self.store = cfg, store
         self.o = cfg["outreach"]
         # Several Gmail accounts (scripts/local_run.py): each one is a "lane" with its own memory (store) and its own
         # Outreach and Email Preview tabs, and takes only its share of the businesses (lane = (this one, how many)),
         # so no business is e-mailed from two accounts. The WhatsApp queue and the letters are the first lane's job.
         self.lane = lane if lane and lane[1] > 1 else None
+        # ... and, on top of the split, each account reads the other accounts' memory before it picks a business:
+        # an address, a business or a website domain any of them e-mailed is never e-mailed by another.
+        self.also_stores = [p for p in also_stores if p and Path(p).is_file()]
         self.whatsapp = whatsapp
         if tab_suffix:
             tabs = dict(self.o["tabs"])
@@ -465,6 +469,22 @@ class Outreach:
         if problem:
             self.code = max(self.code, 2)
 
+    def _others(self, sql: str) -> set:
+        """One column from the other Gmail accounts' memory (read only)."""
+        out: set = set()
+        for path in self.also_stores:
+            try:
+                con = sqlite3.connect(f"file:{path}?mode=ro", uri=True, timeout=30)
+                try:
+                    out |= {r[0] for r in con.execute(sql).fetchall() if r[0]}
+                finally:
+                    con.close()
+            except sqlite3.Error as exc:
+                # Without it the split by domain still keeps the accounts apart; say so, and send nothing new.
+                self.notes.append(f"could not read the other account's memory ({exc}) - no new e-mails this run")
+                raise
+        return out
+
     def _pick(self, n: int) -> list[dict]:
         if n <= 0:
             return []
@@ -491,6 +511,12 @@ class Outreach:
         used_emails = {r["email"] for r in self.store.q("SELECT email FROM threads")}
         used_leads = {r["lead_key"] for r in self.store.q("SELECT DISTINCT lead_key FROM threads")}
         used_domains = {r["domain"] for r in self.store.q("SELECT DISTINCT domain FROM threads WHERE domain IS NOT NULL")}
+        try:
+            used_emails |= self._others("SELECT email FROM threads")
+            used_leads |= self._others("SELECT DISTINCT lead_key FROM threads")
+            used_domains |= self._others("SELECT DISTINCT domain FROM threads WHERE domain IS NOT NULL")
+        except sqlite3.Error:
+            return out              # the follow-ups only
         used_business: set[str] = set()
         for k in used_leads:
             if k in self.by_key:
@@ -588,10 +614,15 @@ class Outreach:
         temp_failures = 0
         bounces_today = self.store.scalar("SELECT COUNT(*) FROM sends WHERE day=? AND status IN ('invalid','bounced')",
                                           (self._today(),), 0)
+        # spread_minutes: the run's e-mails spread evenly over that many minutes (an hour's 17 e-mails about 2.5
+        # minutes apart), never closer than min_gap_seconds nor further than max_gap_seconds; a little random.
+        spread = float(e.get("spread_minutes") or 0) * 60
+        even = min(float(e["max_gap_seconds"]), max(float(e["min_gap_seconds"]), spread / max(1, len(batch))))
         try:
             for i, item in enumerate(batch):
                 if i:
-                    gap = self.rng.uniform(float(e["min_gap_seconds"]), float(e["max_gap_seconds"]))
+                    gap = (max(float(e["min_gap_seconds"]), even * self.rng.uniform(0.8, 1.2)) if spread else
+                           self.rng.uniform(float(e["min_gap_seconds"]), float(e["max_gap_seconds"])))
                     if self.now() - started + gap > budget:
                         self.notes.append("run time budget reached - the rest goes out in the next run")
                         break

@@ -82,20 +82,23 @@ these kinds the open map data has there. `ROBOT_LEAD_MINUTES=240` in `settings` 
 **How many e-mails a day.** India follows your sending plan (11 October 2026), for each Gmail account, counted from
 its first e-mail run after the update: 50 in the first 6 hours, 75 in the next 6, then 100, 100 (325 in the first
 24 hours); 100 and 120 in the next two 12 hours; 125 and 150 in the two after; then 200 every 12 hours (400 a day).
-Follow-ups count in these numbers. The robot sends every hour around the clock; the runs it misses while it searches
-for leads at night are made up by the next ones. `robot status` shows where the plan stands. The US: 15 a day,
-rising by 5 every 3 sending days to 40.
+Follow-ups count in these numbers. With two Gmail accounts each sends this much (twice the e-mails in all, each to
+its own businesses). The robot sends every hour around the clock, each hour's e-mails spread evenly over 45 minutes
+(17 e-mails: one every 2.5 minutes or so), never closer than one minute apart from one account; the runs it misses
+while it searches for leads at night are made up by the next ones. `robot status` shows where the plan stands. The
+US: 15 a day, rising by 5 every 3 sending days to 40.
 
-The brakes: never more than 450 from one account in any 24 hours (a free Gmail account is stopped for a day at about
-500); sending pauses by itself when Gmail answers "limit" (a day) or "blocked" (two days), when more than 5% bounce,
+The brakes: never more than 400 from one account in any 24 hours (your ceiling; a free Gmail account is stopped for a
+day at about 500, which is Gmail's hard stop, not a safe level); sending pauses by itself when Gmail answers "limit" (a day) or "blocked" (two days), when more than 5% bounce,
 or after 10 bounces in a day. The risk: Google's Gmail policy forbids unsolicited commercial mail and judges by how
 recipients react (spam reports), not by a number; the more cold e-mail one personal address sends, the higher the
 risk of losing the account and its inbox. Watch the bounces and replies in `robot status` in the first days.
 
 **More Gmail accounts.** Up to three: in `settings`, fill `OUTREACH_GMAIL_ADDRESS_2` and
 `OUTREACH_GMAIL_APP_PASSWORD_2` (and `_3`), each with an app password made while signed in to that account. Each
-account takes its own share of the businesses (by their e-mail domain, so no business hears from two accounts), runs
-its own sending plan, keeps its own memory (`data/outreach-in-2.sqlite`) and its own tab (**India Outreach 2**);
+account takes its own share of the businesses, split by their e-mail domain (all addresses of one business stay with
+one account), and before each new business it also reads the other accounts' memory: an address, a business or a
+domain any account has e-mailed is never e-mailed by another. Each runs its own sending plan, keeps its own memory (`data/outreach-in-2.sqlite`) and its own tab (**India Outreach 2**);
 they send at the same time. Replies are read in every account's inbox; alerts go to the first account (or
 `OUTREACH_NOTIFY_EMAIL`). The WhatsApp Queue stays the first account's job. `check` tests every account's login;
 `emails --account 2 --max 1 --copy-to you@gmail.com` sends one test e-mail from the second.
@@ -121,7 +124,9 @@ while the robot is on a job says so (`Busy: e-mail sending (the robot, since 22:
 messages, one tap each in WhatsApp Business (docs/WHATSAPP.md: the rules, the setup and the app's automatic replies). `update` gets the newest version of everything;
 after it, `robot off` and `robot on` once start the new version of the switch too.
 
-**Your PDF and lead lists from GitHub: `import`.** Every first e-mail carries the 2-page Aurenflow PDF (named
+**Your PDF and lead lists from GitHub: `import`.** Each PDF carries an edition in its title (`IN-2026-10-11b`): your
+own copy is attached only when it is the same edition as the newest PDF in the code, so an outdated copy is never
+sent (the newest from the code goes out instead, until you import your copy of it). Every first e-mail carries the 2-page Aurenflow PDF (named
 `Aurenflow-overview.pdf` in the e-mail): India gets the rupee version (`marketing/pitch-in.pdf`), the US the dollar
 one. Save your own copy, the one with your WhatsApp number (`Aurenflow-India-overview.pdf` for India,
 `Aurenflow-overview.pdf` for the US), into the tablet's Download folder, then type `import`: from then on that one

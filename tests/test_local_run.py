@@ -21,6 +21,16 @@ def us_market(monkeypatch):
     monkeypatch.setenv("MARKET", "us")       # these tests were written for the US; the India ones set MARKET=in
 
 
+def pdf(text: str, edition: str = "") -> bytes:
+    """A stand-in PDF: its text, and the edition in its title like marketing/build_pitch.py writes it."""
+    title = f"Aurenflow: more Google reviews, edition {edition}" if edition else "Aurenflow"
+    return f"%PDF-1.4 {text}\n<</Title ({title})>>".encode()
+
+
+def edition(lr, suffix: str = "") -> str:
+    return lr.pdf_edition(ROOT / "marketing" / f"pitch{suffix}.pdf")
+
+
 def local_run():
     spec = importlib.util.spec_from_file_location("local_run", ROOT / "scripts" / "local_run.py")
     mod = importlib.util.module_from_spec(spec)
@@ -113,13 +123,37 @@ def test_india_import_takes_the_india_pdf_only(tmp_path, monkeypatch):
     (tmp_path / "data").mkdir()
     downloads = tmp_path / "Download"
     downloads.mkdir()
-    (downloads / "Aurenflow-India-overview.pdf").write_bytes(b"%PDF India")
-    (downloads / "Aurenflow-overview.pdf").write_bytes(b"%PDF US")           # newer, but the US one
+    (downloads / "Aurenflow-India-overview.pdf").write_bytes(pdf("India", edition(lr, "-in")))
+    (downloads / "Aurenflow-overview.pdf").write_bytes(pdf("US", edition(lr)))   # newer, but the US one
     os.utime(downloads / "Aurenflow-India-overview.pdf", (1, 1))
     a = type("A", (), {"folder": [str(downloads)], "dry_run": False})()
     assert lr.cmd_import(a) == 0                                             # a PDF and no lead list: fine
-    assert (tmp_path / "data" / "attachment-in.pdf").read_bytes() == b"%PDF India"
+    assert (tmp_path / "data" / "attachment-in.pdf").read_bytes() == pdf("India", edition(lr, "-in"))
     assert not (tmp_path / "data" / "attachment.pdf").exists()
+
+
+def test_an_old_edition_of_your_pdf_is_never_sent(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("MARKET", "in")
+    lr = local_run()
+    monkeypatch.setattr(lr, "DATA", tmp_path / "data")
+    (tmp_path / "data").mkdir()
+    newest = edition(lr, "-in")
+    assert newest.startswith("IN-")
+    # the copy imported before the PDF changed ($299-$399): no edition in it - the newest from the code goes out
+    (tmp_path / "data" / "attachment-in.pdf").write_bytes(pdf("$299-$399"))
+    assert lr.attachment() == ROOT / "marketing" / "pitch-in.pdf"
+    # importing an old copy again: refused, and said so
+    downloads = tmp_path / "Download"
+    downloads.mkdir()
+    (downloads / "Aurenflow-India-overview.pdf").write_bytes(pdf("$299-$399", "IN-2026-10-10"))
+    assert lr.cmd_import(type("A", (), {"folder": [str(downloads)], "dry_run": False})()) == 0
+    out = capsys.readouterr().out
+    assert "is an older edition (IN-2026-10-10; the newest is " in out and "NOT used" in out
+    assert (tmp_path / "data" / "attachment-in.pdf").read_bytes() == pdf("$299-$399")
+    # the copy of the newest edition: used (it has your number)
+    (downloads / "Aurenflow-India-overview (1).pdf").write_bytes(pdf("10,000", newest))
+    lr.cmd_import(type("A", (), {"folder": [str(downloads)], "dry_run": False})())
+    assert lr.attachment() == tmp_path / "data" / "attachment-in.pdf" and b"10,000" in lr.attachment().read_bytes()
 
 
 def test_the_postal_address_is_needed_for_us_emails_only(tmp_path, monkeypatch):
@@ -167,9 +201,9 @@ def test_import_takes_lead_lists_and_your_pdf_from_downloads(tmp_path, monkeypat
     downloads.mkdir()
     for name in ("leads-austin.zip", "leads-miami.csv", "plant-parlour-automation-1.json", "GuestEcho-overview (1).pdf"):
         (downloads / name).write_bytes(b"x")
-    (downloads / "Qrated-overview.pdf").write_bytes(b"%PDF older name")
+    (downloads / "Qrated-overview.pdf").write_bytes(pdf("older name", edition(lr)))
     os.utime(downloads / "Qrated-overview.pdf", (2, 2))
-    (downloads / "Aurenflow-overview.pdf").write_bytes(b"%PDF new name")
+    (downloads / "Aurenflow-overview.pdf").write_bytes(pdf("new name", edition(lr)))
     os.utime(downloads / "GuestEcho-overview (1).pdf", (1, 1))          # the old name, downloaded long ago
     assert lr.attachment().name == "pitch.pdf"                       # until your own PDF is imported
     calls = []
@@ -177,13 +211,12 @@ def test_import_takes_lead_lists_and_your_pdf_from_downloads(tmp_path, monkeypat
     a = type("A", (), {"folder": [str(downloads)], "dry_run": False})()
     assert lr.cmd_import(a) == 0
     assert lr.attachment() == tmp_path / "data" / "attachment.pdf"
-    assert lr.attachment().read_bytes() == b"%PDF new name"                 # the newest of your PDFs
+    assert lr.attachment().read_bytes() == pdf("new name", edition(lr))      # the newest of your PDFs
     public = tmp_path / "marketing" / "pitch.pdf"
     public.parent.mkdir()
-    public.write_bytes(b"%PDF in the code")
+    public.write_bytes(pdf("in the code", "US-2099-01-01"))                  # an update brought a new edition
     monkeypatch.setattr(lr, "ROOT", tmp_path)
-    os.utime(tmp_path / "data" / "attachment.pdf", (1, 1))                    # imported before an update changed the PDF
-    assert lr.attachment() == public                                         # the code's newer PDF, not the old copy
+    assert lr.attachment() == public                                         # the code's new PDF, never the old copy
     (cmd,) = calls
     assert cmd[0] == "import-leads" and [Path(f).name for f in cmd[3:]] == ["leads-austin.zip", "leads-miami.csv"]
 
@@ -197,7 +230,7 @@ def test_import_waits_for_the_robots_job_and_takes_the_pdf_at_once(tmp_path, mon
     downloads = tmp_path / "Download"
     downloads.mkdir()
     (downloads / "leads-austin.zip").write_bytes(b"x")
-    (downloads / "GuestEcho-overview.pdf").write_bytes(b"%PDF new")
+    (downloads / "GuestEcho-overview.pdf").write_bytes(pdf("new", edition(lr)))
     calls = []
     monkeypatch.setattr(lr, "leadgen", lambda *args: calls.append(args) or 0)
     a = type("A", (), {"folder": [str(downloads)], "dry_run": False})()
@@ -213,7 +246,7 @@ def test_import_waits_for_the_robots_job_and_takes_the_pdf_at_once(tmp_path, mon
             time.sleep(0.05)
         else:
             raise AssertionError("the import did not say it waits")
-        assert (tmp_path / "data" / "attachment.pdf").read_bytes() == b"%PDF new"   # the PDF did not wait
+        assert (tmp_path / "data" / "attachment.pdf").read_bytes() == pdf("new", edition(lr))   # the PDF did not wait
         assert not calls and t.is_alive()                                         # the Sheet part does
     t.join(10)
     assert done == [0] and calls and calls[0][0] == "import-leads"
@@ -366,7 +399,9 @@ def test_two_gmail_accounts_send_at_the_same_time_each_with_its_own_memory(tmp_p
     assert cmd1[cmd1.index("--db") + 1] == str(tmp_path / "outreach-in.sqlite")             # account 1: as before
     assert cmd2[cmd2.index("--db") + 1] == str(tmp_path / "outreach-in-2.sqlite")
     assert cmd1[cmd1.index("--lane") + 1] == "1/2" and "--no-whatsapp" not in cmd1           # WhatsApp: account 1
-    assert ["--lane", "2/2", "--no-whatsapp", "--tab-suffix", " 2"] == cmd2[cmd2.index("--lane"):cmd2.index("--lane") + 5]
+    lane2 = cmd2[cmd2.index("--lane"):]
+    assert lane2 == ["--lane", "2/2", "--also-db", str(tmp_path / "outreach-in.sqlite"), "--no-whatsapp", "--tab-suffix", " 2"]
+    assert cmd1[cmd1.index("--also-db") + 1] == str(tmp_path / "outreach-in-2.sqlite")    # each reads the other's memory
     assert env2["OUTREACH_NOTIFY_EMAIL"] == "one@gmail.com"                                  # reply alerts: account 1
     out = capsys.readouterr().out
     assert "=== Gmail account 2 (two@gmail.com) ===" in out and "x@two.in" in out and "from two@gmail.com" in out

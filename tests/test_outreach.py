@@ -742,3 +742,21 @@ def read_back(sess):
     rows = sess.tabs["Leads"]["rows"]
     cfg = cfg_with()
     return [ld for ld in (parse_lead(dict(zip(rows[0], r)), i + 2, cfg) for i, r in enumerate(rows[1:])) if ld]
+
+
+def test_an_account_never_emails_what_another_account_emailed_and_spreads_its_emails(tmp_path):
+    leads = plan_leads(6)
+    sess, client = sheet_with(leads)
+    clock = Clock(ts(2026, 10, 11, 19))
+    other = OutreachStore(str(tmp_path / "other.sqlite"))              # account 2 already e-mailed cafe1.in and cafe2.in
+    for i in (1, 2):
+        other.conn.execute("INSERT INTO threads(email,lead_key,lead_id,business,domain,stage,step,updated_at) "
+                           "VALUES(?,?,?,?,?,'active',1,0)", (f"hello@cafe{i}.in", f"key{i}", f"RQ-0000{i}", f"Cafe {i}", f"cafe{i}.in"))
+    other.conn.commit()
+    smtp = SmtpWorld()
+    cfg = plan_cfg(plan=[[1, 40]], spread_minutes=10, min_gap_seconds=60, max_gap_seconds=300)
+    runner(cfg, OutreachStore(str(tmp_path / "mine.sqlite")), client, clock, smtp,
+           also_stores=[str(tmp_path / "other.sqlite")]).run()
+    sent = sorted(m["To"] for m in smtp.sent)
+    assert sent == [f"hello@cafe{i}.in" for i in (3, 4, 5, 6)]           # never the other account's businesses
+    assert all(110 <= gap <= 190 for gap in clock.slept)                 # 4 e-mails over 10 minutes: ~150 s apart

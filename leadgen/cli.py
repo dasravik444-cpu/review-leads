@@ -96,6 +96,7 @@ def build_parser() -> argparse.ArgumentParser:
     o.add_argument("--lane", default="", help="I/N: this Gmail account is account I of N (its share of the businesses)")
     o.add_argument("--no-whatsapp", action="store_true", help="leave the WhatsApp queue and letters to another account")
     o.add_argument("--tab-suffix", default="", help="this account's own Outreach and Email Preview tabs (e.g. ' 2')")
+    o.add_argument("--also-db", action="append", default=[], help="another Gmail account's memory: never e-mail its businesses")
     i = sub.add_parser("import-leads", help="add a lead list (CSV or leads-<city>.zip) to the Google Sheet")
     i.add_argument("--config", default=DEFAULT_CONFIG, help=f"campaign config (default {DEFAULT_CONFIG})")
     i.add_argument("files", nargs="+", help="CSV files from export-csv, or zip files of GitHub runs")
@@ -232,7 +233,7 @@ def cmd_outreach(cfg, args) -> int:
         live = None if args.mode is None else args.mode == "live"
         lane = tuple(int(x) for x in args.lane.split("/")) if args.lane else None
         engine = Outreach(cfg, store, live=live, max_emails=args.max_emails, attach=args.attach, bcc=args.bcc,
-                          lane=lane, whatsapp=not args.no_whatsapp, tab_suffix=args.tab_suffix)
+                          lane=lane, whatsapp=not args.no_whatsapp, tab_suffix=args.tab_suffix, also_stores=args.also_db)
         code, summary = engine.run()
     finally:
         store.close()

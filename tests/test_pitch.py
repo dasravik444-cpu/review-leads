@@ -56,7 +56,8 @@ def test_the_india_version_has_rupee_prices_and_the_monthly_review_report():
     for item in ("How many new reviews", "Your star rating", "What it brings you", "add us as a manager"):
         assert item in page, item
     assert "Reply “yes” to our message" in page
-    assert "Leading review platforms charge ₹10,000 or more a month." in page and "$299" not in page
+    assert "Other review platforms charge more than ₹10,000 a month." in page and "$299" not in page
+    assert "edition IN-" in html.split("<title>")[1].split("</title>")[0]      # the tablet never sends an old copy
     assert "unicode-range: U+20B9" in html                       # the rupee sign comes from Inter too, embedded
     us = p.build_html(d).split("</style>", 1)[1]
     assert "We track your Google reviews, every month" not in us and "Reply “yes” to our e-mail" in us

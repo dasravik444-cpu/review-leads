@@ -622,7 +622,10 @@ business's name, ready to print. No cost, no obligation.</p>
 <div class="qr"><svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">{qr_path(reply_link, 0, 0, 100)}</svg><small>{qr_label}</small></div></div>
 <div class="foot"><span>{disclaimer}</span><span>© {year} {esc(brand)} · 2 / 2</span></div>
 </section>"""
-    return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><title>{esc(brand)}: more Google reviews</title>
+    # The edition goes into the PDF's title: the tablet attaches your own copy (with your number) only when it is the
+    # same edition as the newest PDF in the code (scripts/local_run.py attachment), never an outdated one.
+    edition = f", edition {esc(d['edition'])}" if d.get("edition") else ""
+    return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><title>{esc(brand)}: more Google reviews{edition}</title>
 <style>{font_faces()}{CSS}</style></head><body>{page1}{page2}</body></html>"""
 
 

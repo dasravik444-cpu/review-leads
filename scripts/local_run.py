@@ -22,6 +22,7 @@ import argparse
 import csv
 import json
 import os
+import re
 import shutil
 import sqlite3
 import subprocess
@@ -300,15 +301,28 @@ def cmd_hunt(a) -> int:
     return worst
 
 
+def pdf_edition(path: Path) -> str:
+    """The edition stamped in a PDF's title by marketing/build_pitch.py ("IN-2026-10-11"); "" if none."""
+    try:
+        data = path.read_bytes()
+    except OSError:
+        return ""
+    found = re.search(rb"/Title \([^)]*?edition ([A-Za-z0-9.-]+)\)", data)
+    return found.group(1).decode("ascii") if found else ""
+
+
 def attachment() -> Path:
-    """The PDF for first e-mails: your own copy (with your number), once `import` took it from Downloads, else the
-    one in the code. Whichever is newer: a new PDF in the code (after  update ) replaces an older copy of yours until
-    you import your copy of the new one."""
+    """The PDF for first e-mails (and the WhatsApp chats): your own copy (with your number), once `import` took it
+    from Downloads, but only if it is the same edition as the PDF in the code; an outdated copy is never sent - the
+    newest one from the code goes out until you import your copy of it."""
     m = market()
     own, public = DATA / f"attachment{m.pdf_suffix}.pdf", ROOT / "marketing" / f"pitch{m.pdf_suffix}.pdf"
-    if own.is_file() and (not public.is_file() or own.stat().st_mtime >= public.stat().st_mtime):
-        return own
-    return public
+    if own.is_file() and public.is_file():
+        mine, newest = pdf_edition(own), pdf_edition(public)
+        if mine != newest:
+            return public
+        return own if mine or own.stat().st_mtime >= public.stat().st_mtime else public
+    return own if own.is_file() else public
 
 
 def gmail_accounts() -> list[tuple[str, str]]:
@@ -330,10 +344,12 @@ def account_db(i: int) -> Path:
 
 
 def account_args(i: int, n: int) -> list[str]:
-    """What account i of n does besides sending: its share of the businesses, its own tabs; WhatsApp is account 1's."""
+    """What account i of n does besides sending: its share of the businesses (split by e-mail domain), a look into
+    the other accounts' memory before each new business (never e-mailed twice), its own tabs; WhatsApp is account 1's."""
     if n <= 1:
         return []
-    return ["--lane", f"{i}/{n}"] + (["--no-whatsapp", "--tab-suffix", f" {i}"] if i > 1 else [])
+    others = [x for j in range(1, n + 1) if j != i for x in ("--also-db", str(account_db(j)))]
+    return ["--lane", f"{i}/{n}", *others] + (["--no-whatsapp", "--tab-suffix", f" {i}"] if i > 1 else [])
 
 
 def run_accounts(lanes: list[tuple[int, str, list[str], dict]]) -> int:
@@ -441,10 +457,18 @@ def cmd_import(a) -> int:
     pdfs = sorted((f for pattern in m.own_pdfs for f in found(pattern)), key=lambda f: f.stat().st_mtime)
     if pdfs:                           # needs no lock: an e-mail run going on now reads the old or the new file whole
         own = DATA / f"attachment{m.pdf_suffix}.pdf"
-        tmp = own.with_name(own.name + ".new")
-        shutil.copyfile(pdfs[-1], tmp)
-        os.replace(tmp, own)
-        print(f"Your PDF {pdfs[-1].name} is attached to first e-mails to {m.name} from now on.")
+        public = ROOT / "marketing" / f"pitch{m.pdf_suffix}.pdf"
+        mine, newest = pdf_edition(pdfs[-1]), pdf_edition(public)
+        if public.is_file() and mine != newest:
+            print(f"Your PDF {pdfs[-1].name} is an older edition ({mine or 'no edition'}; the newest is {newest}), so "
+                  "it is NOT used. E-mails and WhatsApp carry the newest PDF from the code until you save the new copy "
+                  "of yours into Download and type  import  again.")
+        else:
+            tmp = own.with_name(own.name + ".new")
+            shutil.copyfile(pdfs[-1], tmp)
+            os.replace(tmp, own)
+            print(f"Your PDF {pdfs[-1].name} (edition {mine or '-'}) is attached to first e-mails to {m.name} and sent "
+                  "in WhatsApp chats from now on.")
     lists = [str(f) for f in found("leads-*.zip") + found("leads-*.csv")]
     if not lists:
         print("No lead list (leads-<city>.zip or .csv) in " + ", ".join(map(str, folders)) + ". Download it first "

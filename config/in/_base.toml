@@ -124,19 +124,21 @@ notify_email = ""
 [outreach.email]
 # On since 11 October 2026. Every day, every hour, around the clock.
 enabled = true
-# Your sending plan (11 October 2026), for EACH Gmail account in settings.txt, counted from its first e-mail run
-# after the update (hours from then -> e-mails in those hours):
+# Your sending plan (11 October 2026), for EACH Gmail account in settings.txt (two accounts: twice as many e-mails,
+# each account to its own businesses), counted from its first e-mail run after the update (hours -> e-mails):
 #   0-6: 50 | 6-12: 75 | 12-18: 100 | 18-24: 100 | 24-36: 100 | 36-48: 120 | 48-60: 125 | 60-72: 150
 #   then 200 every 12 hours.
 # Follow-ups are part of these numbers. A run the robot missed (it searches for leads at night) is made up by the
-# next ones. Never more than max_per_24h from one account in any 24 hours: Gmail stops an account for a day at about
-# 500. Sending also pauses by itself when Gmail answers "limit" or "blocked", or too many e-mails bounce.
+# next ones. Never more than max_per_24h from one account in any 24 hours (your ceiling: 400; Gmail itself stops an
+# account for a day at about 500). Sending also pauses by itself when Gmail answers "limit" or "blocked", or too many
+# e-mails bounce.
 plan = [[6, 50], [6, 75], [6, 100], [6, 100], [12, 100], [12, 120], [12, 125], [12, 150]]
 plan_then = [12, 200]
-max_per_24h = 450
+max_per_24h = 400
 max_per_run = 40           # e-mails in one hourly run at most (catching up after the night's lead search)
-min_gap_seconds = 30       # half a minute to a minute and a half between two e-mails
-max_gap_seconds = 90
+spread_minutes = 45        # each run's e-mails spread evenly over 45 minutes (17 e-mails: one every ~2.5 minutes)...
+min_gap_seconds = 60       # ... never closer than a minute apart from one account ...
+max_gap_seconds = 300      # ... nor further than 5 minutes
 run_budget_minutes = 50    # a run stops in time for the next hour's
 max_bounces_per_day = 10   # more bounced addresses than this in a day: sending pauses until tomorrow
 window_start = "00:00"
