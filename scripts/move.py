@@ -57,7 +57,7 @@ def robot_running(now: float | None = None) -> bool:
 
 def _google_key(p: Path) -> bool:
     try:
-        d = json.loads(p.read_text(encoding="utf-8"))
+        d = json.loads(p.read_text(encoding="utf-8-sig"))
     except (OSError, ValueError):
         return False
     return isinstance(d, dict) and d.get("type") == "service_account"
@@ -77,14 +77,19 @@ def pack(target: Path) -> list[str]:
             dst.close()
             zf.write(copy, f"data/{db.name}")
             names.append(f"data/{db.name}")
-        extra = [*sorted(DATA.glob("attachment*.pdf")), STATUS, ROOT / "settings.txt", ROOT / ".env",
-                 *[p for p in sorted((ROOT / "secrets").glob("*.json")) if _google_key(p)]]
+        extra = [*sorted(DATA.glob("attachment*.pdf")), STATUS, ROOT / "settings.txt", ROOT / ".env"]
         for p in extra:
             if p.is_file():
                 arc = p.relative_to(ROOT).as_posix()
                 if ALLOWED.match(arc):
                     zf.write(p, arc)
                     names.append(arc)
+        # The Google key, from the secrets folder or the main folder (both are looked in), into secrets/ there.
+        for p in [*sorted((ROOT / "secrets").glob("*.json")), *sorted(ROOT.glob("*.json"))]:
+            arc = f"secrets/{p.name}"
+            if _google_key(p) and arc not in names and ALLOWED.match(arc):
+                zf.write(p, arc)
+                names.append(arc)
     os.replace(tmp, target)
     return names
 
@@ -176,6 +181,9 @@ def move_in() -> int:
           + (", settings" if "settings.txt" in names else "")
           + (", Google key" if any(n.startswith("secrets/") for n in names) else "")
           + (", your PDF" if any("attachment" in n for n in names) else "") + ".")
+    if not any(n.startswith("secrets/") for n in names) and not any((ROOT / "secrets").glob("*.json")):
+        print("No Google key came along: copy your key file (review-leads-....json) into this device's Download\n"
+              "folder (Quick Share it from the other device) and type  getkey .")
     if kept:
         print(f"What this device had before is kept in {kept.relative_to(ROOT)}.")
     print(f"The file {src.name} was deleted (it holds your Gmail app passwords): delete it on the other device too.")

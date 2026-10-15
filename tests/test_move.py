@@ -47,6 +47,7 @@ def test_move_out_and_in_carries_the_memory_settings_key_and_pdf_and_keeps_one_r
     (tablet / "settings.txt").write_text("OUTREACH_GMAIL_APP_PASSWORD=abcd efgh ijkl mnop\n")
     (tablet / "secrets" / "review-leads-1.json").write_text(json.dumps({"type": "service_account", "client_email": "a@b"}))
     (tablet / "secrets" / "notes.json").write_text('{"a": 1}')              # not a Google key: stays
+    (tablet / "review-leads-2.json").write_text("\ufeff" + json.dumps({"type": "service_account"}))  # main folder
     status = tablet / "data" / "robot-status.json"
     status.write_text(json.dumps({"scheduler": {"heartbeat": time.time()}, "jobs": {"leads": {"result": "ok"}}}))
 
@@ -56,7 +57,8 @@ def test_move_out_and_in_carries_the_memory_settings_key_and_pdf_and_keeps_one_r
     assert m.move_out() == 0
     zf = zipfile.ZipFile(download / "review-leads-move.zip")
     assert sorted(zf.namelist()) == ["data/attachment-in.pdf", "data/bengaluru.sqlite", "data/outreach-in.sqlite",
-                                     "data/robot-status.json", "secrets/review-leads-1.json", "settings.txt"]
+                                     "data/robot-status.json", "secrets/review-leads-1.json",
+                                     "secrets/review-leads-2.json", "settings.txt"]
     assert (tablet / "data" / "moved-out.txt").is_file()                   # the tablet's robot stays off now
     con.close()
 
