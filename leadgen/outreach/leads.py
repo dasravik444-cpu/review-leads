@@ -15,7 +15,8 @@ FREE_MAIL = {"gmail.com", "googlemail.com", "yahoo.com", "yahoo.co.in", "yahoo.i
 
 # Columns outreach reads (by header name, so column order does not matter).
 COLUMNS = ["Lead ID", "Business Name", "Category", "Area", "Address", "Phones", "WhatsApp", "Emails", "Contact Person",
-           "Website", "Priority", "Key", "Status", "Other Contacts (unverified)", "Signals", "USP", "Legal Form"]
+           "Website", "Priority", "Key", "Status", "Other Contacts (unverified)", "Signals", "USP", "Legal Form",
+           "Contact Sources"]
 # Legal forms (as the Leads sheet shows them) of incorporated businesses: in the UK only these may be e-mailed
 # without consent.
 COMPANY_FORMS = {"GmbH/UG/AG", "Ltd/LLP/PLC", "Pty Ltd", "LLC/Inc"}
@@ -60,6 +61,22 @@ class Lead:
     usp: str = ""                       # the business's own one-line claim (from its website), if any
     address: str = ""
     legal_form: str = ""
+    email_sources: str = ""             # where its e-mail address was found ("website (structured data), archive")
+
+    @property
+    def email_rank(self) -> int:
+        """How sure the address still works, by where it was found: 0 the business's own website now (or no source
+        given), 1 open data, 2 a web search, 3 only an old copy of its website (the web archive)."""
+        s = self.email_sources.lower()
+        if not s or "website" in s:
+            return 0
+        if "open data" in s or "overture" in s or "google" in s or "openstreetmap" in s:
+            return 1
+        if "search" in s:
+            return 2
+        if "archive" in s:
+            return 3
+        return 1
 
     @property
     def is_company(self) -> bool:
@@ -156,7 +173,14 @@ def parse_lead(values: dict, row: int, cfg) -> Lead | None:
                 person=str(values.get("Contact Person") or "").strip(), website=str(values.get("Website") or "").strip(),
                 priority=str(values.get("Priority") or "").strip(), status=str(values.get("Status") or "").strip(),
                 signals=str(values.get("Signals") or "").strip(), usp=str(values.get("USP") or "").strip(),
-                address=str(values.get("Address") or "").strip(), legal_form=str(values.get("Legal Form") or "").strip())
+                address=str(values.get("Address") or "").strip(), legal_form=str(values.get("Legal Form") or "").strip(),
+                email_sources=_email_sources(values.get("Contact Sources")))
+
+
+def _email_sources(cell) -> str:
+    """The e-mail part of the Contact Sources column: "phone: website; email: archive, web search" -> "archive, web search"."""
+    m = re.search(r"(?:^|;)\s*email:\s*([^;]*)", str(cell or ""))
+    return m.group(1).strip() if m else ""
 
 
 def read_leads(client, tab: str, cfg) -> list[Lead]:

@@ -56,6 +56,29 @@ class FetchError(Exception):
         self.url = url
 
 
+def internet_ok() -> bool:
+    """Our own connection works: well-known names resolve."""
+    for host in ("www.google.com", "www.cloudflare.com", "github.com"):
+        try:
+            socket.getaddrinfo(host, 443)
+            return True
+        except OSError:
+            continue
+    return False
+
+
+def wait_for_internet(max_seconds: float, every: float = 20.0, sleep=time.sleep, check=internet_ok,
+                      now=time.monotonic) -> bool:
+    """Wait (looking every `every` seconds) until the connection works, at most max_seconds. True when it does."""
+    end = now() + max(0.0, max_seconds)
+    while True:
+        if check():
+            return True
+        if now() >= end:
+            return False
+        sleep(max(1.0, min(every, end - now())))
+
+
 class NetworkDown(FetchError):
     kind = "network_down"
 
@@ -246,23 +269,21 @@ class Http:
         return float("inf") if self.deadline is None else self.deadline - time.time()
 
     # -- connectivity ---------------------------------------------------------
-    def network_ok(self) -> bool:
-        """Cheap check that *our* connection works (cached 30 s)."""
+    def network_ok(self, fresh: bool = False) -> bool:
+        """Cheap check that *our* connection works (cached 30 s; fresh: look again now)."""
         with self._net_lock:
             checked_at, ok = self._net_check
-            if time.time() - checked_at < 30:
+            if not fresh and time.time() - checked_at < 30:
                 return ok
-        ok = False
-        for host in ("www.google.com", "www.cloudflare.com", "github.com"):
-            try:
-                socket.getaddrinfo(host, 443)
-                ok = True
-                break
-            except OSError:
-                continue
+        ok = internet_ok()
         with self._net_lock:
             self._net_check = (time.time(), ok)
         return ok
+
+    def wait_for_network(self, max_seconds: float, every: float = 20.0, sleep=time.sleep) -> bool:
+        """A short drop (Wi-Fi switching, a router restarting): wait for the connection to come back, up to
+        max_seconds. True when it is back."""
+        return wait_for_internet(max_seconds, every, sleep, check=lambda: self.network_ok(fresh=True))
 
     # -- request --------------------------------------------------------------
     def request(self, method: str, url: str, *, service: str | None = None, headers: dict | None = None,

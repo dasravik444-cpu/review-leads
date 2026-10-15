@@ -43,6 +43,7 @@ from .report import contact_coverage, lead_row, markdown_summary, masked_samples
 from .util import get_logger, jdump, jload, local_date, local_now
 
 log = get_logger("runner")
+NETWORK_WAIT_S = 600          # how long a run waits for a lost internet connection to come back
 
 PRIORITY = {"site": 1, "social": 2, "insta": 3, "li": 4, "api": 5}
 PROVIDER_SOURCE = {"gmaps": "google_maps", "places_api": "places_api", "osm": "osm", "overture": "overture"}
@@ -334,6 +335,16 @@ class Runner:
             log.info("auto daily target: %d businesses in the area / %d days = %d leads/day", total, days, self.target)
 
     # ------------------------------------------------------------------ loop
+    def _wait_for_network(self) -> None:
+        """A short drop (Wi-Fi switching, a router restarting): wait for the connection, up to 10 minutes (within the
+        run's time), then carry on where the run stopped. Only a longer outage ends the run (NetworkDown)."""
+        wait = min(NETWORK_WAIT_S, max(0.0, self.deadline - self.now()))
+        log.warning("internet connection lost - waiting up to %.0f minutes for it to come back", wait / 60)
+        if not self.http.wait_for_network(wait):
+            raise NetworkDown("internet connection lost during the run")
+        log.info("internet connection back - carrying on")
+        self.network_failures = 0
+
     def _loop(self):
         pool = ThreadPoolExecutor(max_workers=self.workers, thread_name_prefix="enrich")
         inflight: dict = {}
@@ -351,7 +362,7 @@ class Runner:
                     log.info("time budget reached")
                     break
                 if self.network_failures >= 6 and not self.http.network_ok():
-                    raise NetworkDown("internet connection lost during the run")
+                    self._wait_for_network()
                 self._harvest(inflight, block=False)
                 if checkpoints and self.now() >= next_checkpoint:
                     checkpoints = self._checkpoint_sync()
@@ -372,7 +383,11 @@ class Runner:
                             log.info("all planned searches are done")
                         self.discovery_on = False
                     else:
-                        self._run_search(task)
+                        try:
+                            self._run_search(task)
+                        except NetworkDown:
+                            self._wait_for_network()     # the search is tried again later in the run
+                            continue
                         did = True
                 while len(inflight) < self.workers * 2:
                     t = self._next_enrichment()

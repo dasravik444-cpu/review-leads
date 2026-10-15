@@ -419,8 +419,13 @@ class EmailHunt:
                     continue
                 except NetworkDown as exc:
                     self.stats["not reached (network down)"] += 1
-                    self.notes.append(f"network down: {exc}"[:200])
-                    code = 2
+                    # A short drop: wait for the connection (up to 10 minutes) and go on; this lead is looked at
+                    # again next time. Only a longer outage ends the hunt with an error (the robot tries again).
+                    if code != 2 and self.http.wait_for_network(min(600.0, max(0.0, self.deadline - time.time()))):
+                        continue
+                    if code != 2:
+                        self.notes.append(f"network down: {exc}"[:200])
+                    code = 2            # waited once in vain: the other leads are not waited for again
                     continue
                 except Exception as exc:  # noqa: BLE001 - one odd site must not stop the hunt
                     out = Outcome(error=f"{type(exc).__name__}: {exc}"[:200])

@@ -412,3 +412,22 @@ def test_two_gmail_accounts_send_at_the_same_time_each_with_its_own_memory(tmp_p
     (cmd, addr), = calls
     assert addr == "two@gmail.com" and cmd[cmd.index("--db") + 1].endswith("outreach-in-2.sqlite") and "2/2" in cmd
     assert lr.cmd_emails(type("A", (), {**args, "account": 3})()) == 2
+
+
+def test_emails_resume_ends_a_sending_pause_of_every_account_and_gives_it_a_fresh_start(tmp_path, monkeypatch, capsys):
+    from leadgen.outreach.store import OutreachStore
+
+    monkeypatch.setenv("MARKET", "in")
+    lr = local_run()
+    monkeypatch.setattr(lr, "DATA", tmp_path)
+    now = time.time()
+    one, two = OutreachStore(str(lr.account_db(1))), OutreachStore(str(lr.account_db(2)))
+    one.set("paused_until", now + 3600)
+    one.set("pause_reason", "bounce rate 3/25 is too high - check the e-mail addresses")
+    two.set("paused_until", now - 60)                          # its pause is over already
+    lines = lr.resume_sending(now)
+    assert len(lines) == 1 and lines[0].startswith("Gmail account 1:") and "bounce rate" in lines[0]
+    assert float(one.get("paused_until")) == 0 and float(one.get("bounce_window_from")) == now
+    assert two.get("bounce_window_from") is None
+    assert lr.cmd_emails(type("A", (), {"resume": True})()) == 0
+    assert "No Gmail account is paused" in capsys.readouterr().out

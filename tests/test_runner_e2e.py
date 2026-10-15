@@ -308,3 +308,39 @@ def test_records_without_ids_count_as_format_change(tmp_path):
     assert "format changed" in s["warnings"][-1]
     assert db.scalar("SELECT COUNT(*) FROM places") == 0
     assert db.scalar("SELECT COUNT(*) FROM tasks WHERE kind='search' AND status='done'") == 0
+
+
+def test_a_short_internet_drop_waits_for_the_connection_and_the_search_carries_on(tmp_path):
+    from leadgen.net import NetworkDown
+
+    class Flaky(FakeHttp):
+        def __init__(self, router, back):
+            super().__init__(router)
+            self.down, self.back, self.waits = True, back, []
+
+        def network_ok(self, fresh=False):
+            return not self.down
+
+        def wait_for_network(self, max_seconds, every=20.0, sleep=None):
+            self.waits.append(max_seconds)
+            self.down = not self.back
+            return self.back
+
+    def run(back):
+        world = World()
+
+        def route(method, url, params, data):
+            if http.down and "google.com" in (urlsplit(url).hostname or ""):
+                return NetworkDown("network unreachable (test)")
+            return world(method, url, params, data)
+        http = Flaky(route, back)
+        db = DB(str(tmp_path / f"state-{back}.sqlite"))
+        r = Runner(make_config(), db, http=http, use_sheets=False)
+        world.runner = r
+        return r.run(), http
+
+    (code, summary), http = run(back=True)          # the connection came back: no error, businesses found
+    assert len(http.waits) == 1 and 0 < http.waits[0] <= 600
+    assert summary["status"] != "network down" and summary["stats"]["searches"] > 0
+    (code, summary), http = run(back=False)         # still down after 10 minutes: the run ends (the robot tries again)
+    assert code == 2 and summary["status"] == "network down" and len(http.waits) == 1

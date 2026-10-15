@@ -760,3 +760,90 @@ def test_an_account_never_emails_what_another_account_emailed_and_spreads_its_em
     sent = sorted(m["To"] for m in smtp.sent)
     assert sent == [f"hello@cafe{i}.in" for i in (3, 4, 5, 6)]           # never the other account's businesses
     assert all(110 <= gap <= 190 for gap in clock.slept)                 # 4 e-mails over 10 minutes: ~150 s apart
+
+
+def test_addresses_from_the_website_go_first_and_ones_only_an_old_copy_showed_go_last(tmp_path):
+    from leadgen.outreach.leads import _email_sources
+
+    assert _email_sources("phone: website; email: archive, web search") == "archive, web search"
+    assert _email_sources("email: website (structured data)") == "website (structured data)"
+    assert _email_sources("phone: Google Maps") == "" and _email_sources(None) == ""
+    leads = [lead(1, "Old Cafe", email="hi@oldcafe.in", priority="High"),
+             lead(2, "Search Cafe", email="hi@searchcafe.in", priority="High"),
+             lead(3, "Map Cafe", email="hi@mapcafe.in", priority="High"),
+             lead(4, "Site Cafe", email="hi@sitecafe.in", priority="High")]
+    for ld, src in zip(leads, ("phone: website; email: archive", "email: web search", "email: Overture Maps (open data)",
+                               "email: website (structured data)")):
+        ld["Contact Sources"] = src
+    sess, client = sheet_with(leads)
+    smtp, clock = SmtpWorld(), Clock(ts(2026, 10, 14, 11))
+    runner(cfg_with(), OutreachStore(str(tmp_path / "o.sqlite")), client, clock, smtp, max_emails=3).run()
+    assert [m["To"] for m in smtp.sent] == ["hi@sitecafe.in", "hi@mapcafe.in", "hi@searchcafe.in"]     # the archive one waits
+
+
+def test_a_short_internet_drop_while_sending_waits_a_minute_and_sends_the_same_email_again(tmp_path):
+    sess, client = sheet_with(LEADS)
+    drops = [1, 1, 1, 1]                       # the next 4 tries fail (2 tries per send: 2 sends fail)
+
+    def fail(msg):
+        if drops:
+            drops.pop()
+            return OSError("Network is unreachable")
+    smtp, clock = SmtpWorld(fail=fail), Clock(ts(2026, 10, 14, 11))
+    code, s = runner(cfg_with(), OutreachStore(str(tmp_path / "o.sqlite")), client, clock, smtp, max_emails=2).run()
+    assert code == 0 and len(smtp.sent) == 2 and clock.slept.count(60) == 2
+    assert not any("could not reach Gmail" in n for n in s["notes"])
+    # a longer outage: 5 tries a minute apart, then the rest is left for the next run (nothing lost)
+    sess, client = sheet_with(LEADS)
+    smtp, clock = SmtpWorld(fail=lambda msg: OSError("Network is unreachable")), Clock(ts(2026, 10, 14, 11))
+    store = OutreachStore(str(tmp_path / "o2.sqlite"))
+    code, s = runner(cfg_with(), store, client, clock, smtp, max_emails=2).run()
+    assert code == 2 and smtp.sent == [] and clock.slept.count(60) == 5
+    assert any("could not reach Gmail" in n for n in s["notes"]) and status_of(sess, "key3") == "New"
+
+
+def bounce_cfg(**email):
+    return plan_cfg(plan=[[1, 40]], max_per_run=10, pause_min_sends=5, pause_min_bounces=3, pause_bounce_rate=0.05,
+                    max_bounces_per_day=50, bounce_pause_hours=12, **email)
+
+
+def test_too_many_bounces_pause_sending_12_hours_then_it_starts_afresh(tmp_path):
+    def fail(msg):
+        if msg["To"].startswith("gone"):
+            return smtplib.SMTPRecipientsRefused({msg["To"]: (550, b"5.1.1 The email account does not exist")})
+    leads = [lead(i, f"Gone {i}", email=f"gone@gone{i}.in", priority="High") for i in range(1, 4)] + \
+        [lead(i, f"Cafe {i}", email=f"hello@cafe{i}.in", priority="Medium") for i in range(4, 30)]
+    sess, client = sheet_with(leads)
+    smtp, clock = SmtpWorld(fail=fail), Clock(ts(2026, 10, 14, 11))
+    store = OutreachStore(str(tmp_path / "o.sqlite"))
+    code, s = runner(bounce_cfg(), store, client, clock, smtp, max_emails=6).run()
+    assert code == 2 and any("SENDING PAUSED until" in n for n in s["notes"])          # 3 of 6 bounced
+    until = float(store.get("paused_until"))
+    assert until - clock.t == 12 * 3600 and float(store.get("bounce_window_from")) == until
+    clock.t = until - 600
+    sent = len(smtp.sent)
+    runner(bounce_cfg(), store, client, clock, smtp, max_emails=3).run()
+    assert len(smtp.sent) == sent                                                       # still paused
+    clock.t = until + 60                                                                # after the pause: a fresh start,
+    code, s = runner(bounce_cfg(), store, client, clock, smtp, max_emails=3).run()      # not stopped by the old bounces
+    assert code == 0 and len(smtp.sent) == sent + 3 and float(store.get("paused_until")) == until
+
+
+def test_two_bounces_alone_never_pause_and_an_old_two_day_bounce_pause_is_lifted(tmp_path):
+    def fail(msg):
+        if msg["To"].startswith("gone"):
+            return smtplib.SMTPRecipientsRefused({msg["To"]: (550, b"5.1.1 The email account does not exist")})
+    leads = [lead(i, f"Gone {i}", email=f"gone@gone{i}.in", priority="High") for i in range(1, 3)] + \
+        [lead(i, f"Cafe {i}", email=f"hello@cafe{i}.in", priority="Medium") for i in range(3, 30)]
+    sess, client = sheet_with(leads)
+    smtp, clock = SmtpWorld(fail=fail), Clock(ts(2026, 10, 14, 11))
+    store = OutreachStore(str(tmp_path / "o.sqlite"))
+    code, s = runner(bounce_cfg(), store, client, clock, smtp, max_emails=5).run()      # 2 of 5 bounced: 40%, but only 2
+    assert not float(store.get("paused_until", 0) or 0) and len(smtp.sent) == 3
+    old = OutreachStore(str(tmp_path / "old.sqlite"))                                   # paused by the version before
+    old.set("paused_until", ts(2026, 10, 16, 0, 5))
+    old.set("pause_reason", "bounce rate 7/61 in 7 days is too high - check the e-mail addresses")
+    smtp, start = SmtpWorld(), clock.t
+    code, s = runner(bounce_cfg(), old, sheet_with(plan_leads(5))[1], clock, smtp, max_emails=2).run()
+    assert len(smtp.sent) == 2 and any("lifted" in n for n in s["notes"])
+    assert float(old.get("bounce_window_from")) == start and not float(old.get("paused_until"))

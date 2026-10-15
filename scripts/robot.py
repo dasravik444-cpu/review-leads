@@ -33,6 +33,7 @@ import json
 import os
 import re
 import signal
+import socket
 import sqlite3
 import subprocess
 import sys
@@ -75,7 +76,10 @@ class Job:
 # Lead search time per city and day (minutes), unless ROBOT_LEAD_MINUTES says otherwise: India aims at about 1,000
 # businesses a day (the run stops sooner once the day's share is done).
 LEAD_MINUTES = {"in": 180, "us": 60}
-RETRY_JOBS, RETRIES, RETRY_MINUTES = ("leads", "hunt"), 2, 30    # a failed lead job runs again, twice, 30 minutes apart
+# A job that fails (the internet gone for a while, Google not answering) runs again 10 minutes later, 3 times, before
+# it waits for its next time; before each job the robot waits up to 10 minutes for a lost internet connection.
+RETRY_JOBS, RETRIES, RETRY_MINUTES = ("leads", "hunt", "emails", "update"), 3, 10
+NETWORK_WAIT_MINUTES = 10
 # The lead jobs' times (India time), out of the way of the market's e-mail hours.
 # India: the lead search at night (01:00, up to about 3 hours, then the e-mail hunt), so new leads are in the Sheet
 # before the first e-mails at 07:05.
@@ -334,6 +338,37 @@ def do_backup(now: float) -> str:
     return f"ok: {target} ({len(dbs)} memory files)"
 
 
+def internet_ok() -> bool:
+    """Our own internet connection works: well-known names resolve (the same check as the lead engine's)."""
+    for host in ("www.google.com", "www.cloudflare.com", "github.com"):
+        try:
+            socket.getaddrinfo(host, 443)
+            return True
+        except OSError:
+            continue
+    return False
+
+
+def wait_for_internet(max_seconds: float, should_stop=lambda: False, heartbeat=lambda: None, every: float = 30,
+                      check=None, sleep=time.sleep) -> bool:
+    """A short drop (Wi-Fi switching, a router restarting): wait for the connection, up to max_seconds, still reporting
+    in (heartbeat) and stopping at once on  robot off . True when it works."""
+    check = check or internet_ok
+    end = time.monotonic() + max_seconds
+    told = False
+    while not check():
+        if should_stop() or time.monotonic() >= end:
+            return False
+        if not told:
+            log(f"no internet connection - waiting up to {max_seconds / 60:.0f} minutes for it to come back")
+            told = True
+        heartbeat()
+        sleep(every)
+    if told:
+        log("internet connection back")
+    return True
+
+
 def beat(st: dict) -> None:
     st.setdefault("scheduler", {})["heartbeat"] = time.time()
 
@@ -350,7 +385,10 @@ def run_job(job: Job, settings: dict, should_stop=lambda: False, serving: bool =
             pass
     updated = False
     try:
-        if job.name == "update":
+        if job.name != "backup" and not wait_for_internet(NETWORK_WAIT_MINUTES * 60, should_stop,
+                                                          (lambda: update_status(beat)) if serving else (lambda: None)):
+            result = "failed: no internet connection" if not should_stop() else "stopped (robot off)"
+        elif job.name == "update":
             result, updated = do_update()
         elif job.name == "backup":
             result = do_backup(now)
@@ -369,8 +407,9 @@ def run_job(job: Job, settings: dict, should_stop=lambda: False, serving: bool =
             rec["retry_at"] = time.time() + 300   # a job started by hand holds the lock: again in 5 minutes
         elif result.startswith("stopped (robot off)"):
             rec.update(result="stopped (robot off) - runs again when on", retry_at=0)   # the slot stays due
-        elif job.name in RETRY_JOBS and not result.startswith("ok") and rec.get("fails", 0) < RETRIES:
-            # The lead search must not miss a day: the slot stays due and it runs again in half an hour (twice)
+        elif job.name in RETRY_JOBS and result.startswith("failed") and rec.get("fails", 0) < RETRIES and \
+                (job.name != "update" or "git pull" in result or "internet" in result):
+            # Not a whole day lost to a short outage: the slot stays due and the job runs again in 10 minutes
             again = time.time() + RETRY_MINUTES * 60
             rec.update(result=f"{result[:60]} - again at {fmt(again)[-5:]}", retry_at=again, fails=rec.get("fails", 0) + 1)
         else:
@@ -481,7 +520,7 @@ def email_counts(now: float, m: markets.Market | None = None) -> dict:
         return {}
     today = datetime.fromtimestamp(now, m.tz).date().isoformat()
     out = {"today": 0, "all": 0, "first": 0, "bounced": 0, "days": 0, "last24": 0, "replies": {}, "accounts": [],
-           "plan_started": 0.0}
+           "plan_started": 0.0, "paused": [], "recent_bounces": []}
     for i, db in enumerate(dbs, start=1):
         try:
             con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
@@ -496,9 +535,16 @@ def email_counts(now: float, m: markets.Market | None = None) -> dict:
             out["days"] = max(out["days"], one("SELECT COUNT(DISTINCT day) FROM sends WHERE status='sent' AND day < ?", today))
             for kind, n in con.execute("SELECT kind, COUNT(*) FROM replies GROUP BY kind").fetchall():
                 out["replies"][kind] = out["replies"].get(kind, 0) + n
+            meta = dict(con.execute("SELECT key, value FROM meta WHERE key IN "
+                                    "('plan_started','paused_until','pause_reason')").fetchall())
             if i == 1:
-                row = con.execute("SELECT value FROM meta WHERE key='plan_started'").fetchone()
-                out["plan_started"] = float(json.loads(row[0])) if row else 0.0
+                out["plan_started"] = float(json.loads(meta["plan_started"])) if "plan_started" in meta else 0.0
+            until = float(json.loads(meta["paused_until"])) if meta.get("paused_until") else 0.0
+            if until > now:
+                out["paused"].append((i, until, str(json.loads(meta.get("pause_reason") or '""'))))
+            for email, err, at in con.execute("SELECT email, error, sent_at FROM sends WHERE status IN ('invalid','bounced') "
+                                              "ORDER BY sent_at DESC LIMIT 5").fetchall():
+                out["recent_bounces"].append((at or 0, i, email, " ".join(str(err or "").split())[:70]))
             out["accounts"].append((i, today_n, last24))
             con.close()
         except (sqlite3.Error, ValueError, TypeError):
@@ -666,6 +712,11 @@ def status_text(now: float | None = None) -> str:
             lines += ["", f"{head}: {em['today']} sent today (today's limit {cap}, rising slowly to {top}), {em['all']} "
                           f"in all ({em['first']} first e-mails); bounced {em['bounced']}; replies: interested "
                           f"{r.get('positive', 0)}, not interested {r.get('negative', 0)}, other {r.get('other', 0)}"]
+        for i, until, why in em["paused"]:
+            lines.append(f"  Gmail account {i}: sending PAUSED until {fmt(until)} - {why}")
+        if em["recent_bounces"]:
+            lines.append("  Bounced lately (never e-mailed again): " + "; ".join(
+                f"{email}" + (f" ({err})" if err else "") for _, _, email, err in sorted(em["recent_bounces"], reverse=True)[:5]))
     elif paused:
         lines += ["", f"{head}: none sent yet"]
     return "\n".join(lines)

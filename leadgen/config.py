@@ -75,6 +75,8 @@ DEFAULTS: dict = {
                   # plan: [[hours, e-mails], ...] then plan_then every [hours, e-mails] (leadgen/outreach/plan.py),
                   # instead of start_per_day/step; max_per_24h: never more from one account in any 24 hours
                   "plan": [], "plan_then": [], "max_per_24h": 450, "spread_minutes": 0,
+                  # too many bounces: sending pauses this long, then starts afresh (judged on new e-mails only)
+                  "bounce_pause_hours": 12, "pause_min_bounces": 3,
                   "subjects": [], "first": "", "follow_ups": [], "footer": "", "attachment": ""},
         "whatsapp": {"enabled": True, "start_per_day": 20, "step": 10, "step_every_days": 3, "max_per_day": 50,
                      # include_landlines: also try the other phone numbers (after the mobiles), one at a time

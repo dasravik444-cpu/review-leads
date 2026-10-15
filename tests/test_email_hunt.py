@@ -264,3 +264,46 @@ def test_common_word_is_no_tie_and_chain_sites_are_not_read_deeply():
     http = FakeHttp(router_for(sites))
     res = crawl_site(http, "https://chainhotels.com/", "La Terrasse", max_pages=10, deep=True, known_phones=("+913322492323",))
     assert emails_of(res) == {} and not any("bengaluru" in u for _, u in http.calls)
+
+
+def test_a_short_internet_drop_during_the_hunt_waits_and_carries_on_a_long_one_waits_once(tmp_path):
+    from leadgen.net import NetworkDown, wait_for_internet
+
+    # the waiting itself: looks every 20 s, gives up after max_seconds
+    clock, slept = [0.0], []
+
+    def sleep(s):
+        slept.append(s)
+        clock[0] += s
+    ups = iter([False, False, True])
+    assert wait_for_internet(600, sleep=sleep, check=lambda: next(ups), now=lambda: clock[0]) and slept == [20, 20]
+    clock[0], slept[:] = 0.0, []
+    assert not wait_for_internet(60, sleep=sleep, check=lambda: False, now=lambda: clock[0]) and sum(slept) == 60
+
+    class Waits(FakeHttp):
+        def __init__(self, router, back):
+            super().__init__(router)
+            self.back, self.waits = back, []
+
+        def wait_for_network(self, max_seconds, every=20.0, sleep=None):
+            self.waits.append(max_seconds)
+            return self.back
+
+    def hunt_with(back):
+        db = DB(str(tmp_path / f"h{back}.sqlite"))
+        with db.tx():
+            for i in (1, 2, 3):
+                place(db, f"k{i}", f"Cafe {i}", website=f"https://cafe{i}.in/")
+                db.add_contact(f"k{i}", "phone", f"+91983001111{i}", source="overture", confidence="medium")
+        sites = {f"https://cafe{i}.in/": NetworkDown("network unreachable") for i in (1, 2)}
+        sites["https://cafe3.in/"] = page("Cafe 3", "98300 11113 hello@cafe3.in")
+        http = Waits(router_for(sites), back)
+        code, s = EmailHunt(make_config(), db, limit=10, use_sheets=False, http=http, resolver=FakeResolver(set()),
+                            workers=1).run()
+        return code, s, http
+
+    code, s, http = hunt_with(True)                    # back within 10 minutes: no error, the hunt went on
+    assert code == 0 and len(http.waits) == 2 and 0 < http.waits[0] <= 600
+    assert s["leads_with_email_after"] == 1
+    code, s, http = hunt_with(False)                   # still down after 10 minutes: an error (the robot tries again)
+    assert code == 2 and len(http.waits) == 1          # ... waited once, not once per lead

@@ -383,8 +383,40 @@ def run_accounts(lanes: list[tuple[int, str, list[str], dict]]) -> int:
     return worst
 
 
+def resume_sending(now: float | None = None) -> list[str]:
+    """emails --resume: end a sending pause of every Gmail account now (it then gets a fresh start: the bounce brake
+    judges only the e-mails sent from now on). One line per account that was paused."""
+    from leadgen.outreach.store import OutreachStore
+    from leadgen.util import fmt_local
+
+    now = time.time() if now is None else now
+    out = []
+    for i in range(1, 4):
+        db = account_db(i)
+        if not db.is_file():
+            continue
+        store = OutreachStore(str(db))
+        try:
+            until = float(store.get("paused_until", 0) or 0)
+            if until <= now:
+                continue
+            why = str(store.get("pause_reason", "") or "")
+            store.set("paused_until", 0)
+            store.set("bounce_window_from", now)
+            out.append(f"Gmail account {i}: the pause until {fmt_local(market().tz.key, until)} ({why}) is ended")
+        finally:
+            store.conn.close()
+    return out
+
+
 def cmd_emails(a) -> int:
     m = market()
+    if getattr(a, "resume", False):
+        lines = resume_sending()
+        print("\n".join(lines) if lines else "No Gmail account is paused: nothing to do.")
+        if lines:
+            print("The robot sends again at its next hourly e-mail time (robot status shows it).")
+        return 0
     ok, when = email_time()
     if not ok and not a.now and not a.check:
         print(f"It is {when}: outside office hours in {m.name}.\n"
@@ -593,6 +625,7 @@ def main(argv=None) -> int:
     em.add_argument("--copy-to", default="", help="a blind copy of each first e-mail to this address (yours)")
     em.add_argument("--check", action="store_true", help="only read replies and bounces, send nothing (any time)")
     em.add_argument("--account", type=int, default=0, help="only this Gmail account (1, 2 or 3; default: all)")
+    em.add_argument("--resume", action="store_true", help="end a sending pause now (e.g. the bounce brake's)")
     wa = sub.add_parser("whatsapp", help="the WhatsApp Queue: what to send, the next message, a result (sends nothing)")
     wa_sub = wa.add_subparsers(dest="action", required=True)
     wl = wa_sub.add_parser("list", help="the messages waiting")

@@ -39,6 +39,7 @@ NEXT_STEP = {"positive": "Send the free preview (WhatsApp link) and call them",
              "negative": "Removed - they will not be contacted again",
              "other": "Read the reply and answer it yourself"}
 NO_REPLY_AFTER_DAYS = 5
+NETWORK_RETRIES, NETWORK_RETRY_S = 5, 60      # an e-mail Gmail could not be reached for: again after 1 minute, 5 times
 
 
 def _minutes(hhmm: str) -> int:
@@ -434,6 +435,14 @@ class Outreach:
             self._dry_run_login_check()
             return
         paused = float(self.store.get("paused_until", 0) or 0)
+        if paused > self.now() and str(self.store.get("pause_reason", "")).startswith("bounce rate") and \
+                not self.store.get("bounce_window_from"):
+            # A bounce pause of the version before (up to two days, then stopped again by the same old bounces):
+            # ended now, and sending starts afresh, judged on the new e-mails only.
+            self.store.set("paused_until", 0)
+            self.store.set("bounce_window_from", self.now())
+            self.notes.append("the earlier bounce pause was lifted: sending starts afresh (judged on new e-mails)")
+            paused = 0
         if paused > self.now():
             self.notes.append(f"sending paused until {fmt_local(self.cfg.tz, paused)} ({self.store.get('pause_reason', '')})")
             return
@@ -522,7 +531,9 @@ class Outreach:
             if k in self.by_key:
                 used_business |= self._business_keys(self.by_key[k])
         rule = self.rules.cold_email
-        for lead in sorted(self.leads, key=lambda ld: (0 if ld.opted_in else 1, self._score(ld))):
+        # Addresses on the business's own website now first (they bounce least), then open data, web search, and
+        # last those only an old copy of the website showed (the most likely to be gone).
+        for lead in sorted(self.leads, key=lambda ld: (0 if ld.opted_in else 1, ld.email_rank, self._score(ld))):
             if len(out) >= n:
                 break
             if self.lane and lead_lane(lead, self.lane[1]) != self.lane[0]:
@@ -632,6 +643,14 @@ class Outreach:
                 try:
                     msg = self._compose(item)
                     res = self.sender.send(msg)
+                    # The internet dropped for a moment: wait a minute and send the same e-mail again (5 times at
+                    # most, within the run's time) before leaving the rest to the next run.
+                    tries = 0
+                    while res.status == "network" and tries < NETWORK_RETRIES and \
+                            self.now() - started + NETWORK_RETRY_S <= budget:
+                        tries += 1
+                        self.sleep(NETWORK_RETRY_S)
+                        res = self.sender.send(msg)
                 except Exception as exc:  # noqa: BLE001 - one odd lead must never stop the run
                     self.notes.append(f"skipped {item['email']}: {type(exc).__name__}: {exc}"[:200])
                     continue
@@ -717,19 +736,32 @@ class Outreach:
         self.notes.append(f"SENDING PAUSED until {until.strftime('%Y-%m-%d %H:%M')}: {reason}")
         self.code = max(self.code, 2)
 
+    def _bounce_window(self) -> tuple[int, int]:
+        """(e-mails sent, bounced) over the last 7 days, but only since the last bounce pause ended: after a pause
+        sending gets a fresh start, so it is judged again on what it sends from then on (at least pause_min_sends),
+        not stopped again at once by the bounces that caused the pause."""
+        since = max(self.now() - 7 * 86400, float(self.store.get("bounce_window_from", 0) or 0))
+        sent = self.store.scalar("SELECT COUNT(*) FROM sends WHERE sent_at>=? AND status IN ('sent','invalid')", (since,), 0)
+        bad = self.store.scalar("SELECT COUNT(*) FROM sends WHERE sent_at>=? AND status IN ('invalid','bounced')", (since,), 0)
+        return sent, bad
+
     def _check_bounce_rate(self) -> None:
         e = self.o["email"]
-        since = self.now() - 7 * 86400
-        sent = self.store.scalar("SELECT COUNT(*) FROM sends WHERE sent_at>=? AND status IN ('sent','invalid')", (since,), 0)
-        bad = self.store.scalar("SELECT COUNT(*) FROM sends WHERE sent_at>=? AND status IN ('invalid','bounced')", (since,), 0)
-        if sent >= e["pause_min_sends"] and bad / max(sent, 1) >= e["pause_bounce_rate"]:
+        sent, bad = self._bounce_window()
+        if sent >= e["pause_min_sends"] and bad >= int(e.get("pause_min_bounces") or 1) and \
+                bad / max(sent, 1) >= e["pause_bounce_rate"]:
             if float(self.store.get("paused_until", 0) or 0) <= self.now():
-                self._pause(2, f"bounce rate {bad}/{sent} in 7 days is too high - check the e-mail addresses")
+                hours = float(e.get("bounce_pause_hours") or 12)
+                until = self.now() + hours * 3600
+                self.store.set("paused_until", until)
+                self.store.set("pause_reason", f"bounce rate {bad}/{sent} is too high - check the e-mail addresses")
+                self.store.set("bounce_window_from", until)       # judged afresh from when sending starts again
+                self.notes.append(f"SENDING PAUSED until {fmt_local(self.cfg.tz, until)}: bounce rate {bad}/{sent} "
+                                  "is too high - check the e-mail addresses")
+                self.code = max(self.code, 2)
 
     def bounce_rate(self) -> str:
-        since = self.now() - 7 * 86400
-        sent = self.store.scalar("SELECT COUNT(*) FROM sends WHERE sent_at>=? AND status IN ('sent','invalid')", (since,), 0)
-        bad = self.store.scalar("SELECT COUNT(*) FROM sends WHERE sent_at>=? AND status IN ('invalid','bounced')", (since,), 0)
+        sent, bad = self._bounce_window()
         return f"{100 * bad / sent:.1f}% ({bad}/{sent})" if sent else ""
 
     # ------------------------------------------------------------------ WhatsApp

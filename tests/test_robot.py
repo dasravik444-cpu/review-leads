@@ -32,6 +32,7 @@ def robot(tmp_path, monkeypatch):
     monkeypatch.setattr(mod, "LOGS", tmp_path / "data" / "logs")
     monkeypatch.setattr(mod, "STATUS", tmp_path / "data" / "robot-status.json")
     monkeypatch.setattr(mod, "STOP", tmp_path / "data" / "robot.stop")
+    monkeypatch.setattr(mod, "internet_ok", lambda: True)       # the tests never depend on this machine's internet
     return mod
 
 
@@ -305,22 +306,49 @@ def test_status_shows_the_city_campaign_under_way(tmp_path, monkeypatch):
             "  bengaluru: day 3 of 7, 40% of the city searched, 1,234 businesses of these kinds on the map (open data)") in text
 
 
-def test_a_failed_lead_search_runs_again_twice_then_waits_for_tomorrow(tmp_path, monkeypatch):
+def test_a_failed_job_runs_again_every_10_minutes_3_times_then_waits_for_its_next_time(tmp_path, monkeypatch):
     r = robot(tmp_path, monkeypatch)
     (tmp_path / "data").mkdir()
-    monkeypatch.setattr(r, "run_command", lambda *a, **k: 1)          # the lead search fails
+    monkeypatch.setattr(r, "run_command", lambda *a, **k: 1)          # the lead search fails (an outage)
     leads = r.jobs({})["leads"]
-    for attempt in (1, 2):
+    for attempt in (1, 2, 3):
         r.run_job(leads, {})
         rec = r.load_status()["jobs"]["leads"]
-        assert rec["fails"] == attempt and rec["retry_at"] > time.time() + 25 * 60 and "again at" in rec["result"]
+        assert rec["fails"] == attempt and "again at" in rec["result"]
+        assert time.time() + 9 * 60 < rec["retry_at"] < time.time() + 11 * 60
         assert "last_started" not in rec                                # the day's slot stays due
     r.run_job(leads, {})
     rec = r.load_status()["jobs"]["leads"]
-    assert rec["fails"] == 0 and rec["last_started"] and rec["result"].startswith("failed")   # tomorrow again
+    assert rec["fails"] == 0 and rec["last_started"] and rec["result"].startswith("failed")   # its next time
+    r.run_job(r.jobs({})["emails"], {})                               # e-mail runs are retried the same way
+    assert r.load_status()["jobs"]["emails"]["fails"] == 1
     monkeypatch.setattr(r, "run_command", lambda *a, **k: 0)
-    r.run_job(r.jobs({})["emails"], {})                               # e-mails are not retried this way
-    assert "fails" not in r.load_status()["jobs"]["emails"] or r.load_status()["jobs"]["emails"]["fails"] == 0
+    r.run_job(r.jobs({})["emails"], {})
+    assert r.load_status()["jobs"]["emails"]["fails"] == 0 and r.load_status()["jobs"]["emails"]["result"] == "ok"
+    # an update that failed for want of internet is retried; one whose new version did not start is not
+    monkeypatch.setattr(r, "do_update", lambda: ("failed: git pull: fatal: unable to access", False))
+    r.run_job(r.jobs({})["update"], {})
+    assert r.load_status()["jobs"]["update"]["fails"] == 1
+    monkeypatch.setattr(r, "do_update", lambda: ("failed: version abc did not start cleanly - kept def", False))
+    r.run_job(r.jobs({})["update"], {})
+    assert r.load_status()["jobs"]["update"]["fails"] == 0
+
+
+def test_before_a_job_the_robot_waits_for_the_internet_to_come_back(tmp_path, monkeypatch):
+    r = robot(tmp_path, monkeypatch)
+    (tmp_path / "data").mkdir()
+    ran, beats = [], []
+    states = iter([False, False, True])                              # down for two looks, then back
+    assert r.wait_for_internet(600, heartbeat=lambda: beats.append(1), check=lambda: next(states),
+                               sleep=lambda s: None)
+    assert len(beats) == 2                                           # still reports in while it waits
+    assert not r.wait_for_internet(0, check=lambda: False, sleep=lambda s: None)       # gone for good: no
+    assert not r.wait_for_internet(600, should_stop=lambda: True, check=lambda: False, sleep=lambda s: None)
+    monkeypatch.setattr(r, "wait_for_internet", lambda *a, **k: False)                  # still no internet
+    monkeypatch.setattr(r, "run_command", lambda *a, **k: ran.append(a) or 0)
+    r.run_job(r.jobs({})["hunt"], {})
+    rec = r.load_status()["jobs"]["hunt"]
+    assert not ran and rec["result"].startswith("failed: no internet connection") and rec["fails"] == 1
 
 
 def test_status_shows_the_sending_plan_and_each_gmail_account(tmp_path, monkeypatch):
@@ -346,3 +374,14 @@ def test_status_shows_the_sending_plan_and_each_gmail_account(tmp_path, monkeypa
     assert ("Sending plan: hour 7, block 2 (75 e-mails in 6 hours); about 379 in the next 24 hours, per Gmail account "
             "(never more than 450 in 24 hours)") in text
     assert "Gmail account 1: 3 sent today" in text and "Gmail account 2: 2 sent today" in text
+    assert "PAUSED" not in text and "Bounced lately" not in text and "today's limit" not in text
+    # the bounce brake stopped account 2: status says until when and why, and which addresses bounced
+    two = OutreachStore(str(tmp_path / "data" / "outreach-in-2.sqlite"))
+    two.conn.execute("INSERT INTO sends(email,lead_key,step,sent_at,day,status,error) VALUES('gone@x.in','kx',1,?,"
+                     "'2026-10-12','invalid','550 5.1.1 The email account that you tried to reach does not exist')", (now - 60,))
+    two.set("paused_until", now + 12 * 3600)
+    two.set("pause_reason", "bounce rate 3/40 is too high - check the e-mail addresses")
+    text = r.status_text(now)
+    assert "Sending plan: hour 7" in text and "today's limit" not in text
+    assert "Gmail account 2: sending PAUSED until Mon 12 Oct 16:00 - bounce rate 3/40 is too high" in text
+    assert "Bounced lately (never e-mailed again): gone@x.in (550 5.1.1 The email account that you tried to reach" in text

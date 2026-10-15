@@ -69,7 +69,7 @@ class FakeHttp(Http):
         return Response(url=final or url, status=status, headers={"content-type": ctype}, content=content[:max_bytes], elapsed=0.001,
                         truncated=len(content) > max_bytes)
 
-    def network_ok(self) -> bool:
+    def network_ok(self, fresh: bool = False) -> bool:
         return True
 
 

@@ -89,8 +89,13 @@ while it searches for leads at night are made up by the next ones. `robot status
 US: 15 a day, rising by 5 every 3 sending days to 40.
 
 The brakes: never more than 400 from one account in any 24 hours (your ceiling; a free Gmail account is stopped for a
-day at about 500, which is Gmail's hard stop, not a safe level); sending pauses by itself when Gmail answers "limit" (a day) or "blocked" (two days), when more than 5% bounce,
-or after 10 bounces in a day. The risk: Google's Gmail policy forbids unsolicited commercial mail and judges by how
+day at about 500, which is Gmail's hard stop, not a safe level); sending pauses by itself when Gmail answers "limit" (a day) or "blocked" (two days),
+after 10 bounces in a day, and for 12 hours when at least 3 and 5% of at least 40 e-mails bounce (the **bounce
+brake**). After a bounce-brake pause sending starts afresh: it is judged again on the e-mails sent from then on, not
+stopped again at once by the old bounces. `robot status` shows a pause (**Gmail account 1: sending PAUSED until ...**)
+and the addresses that bounced lately (each one is never e-mailed again); `emails --resume` ends a pause now. Addresses
+found on the business's own website go out first (they bounce least), those only an old copy of its website showed
+last. The risk: Google's Gmail policy forbids unsolicited commercial mail and judges by how
 recipients react (spam reports), not by a number; the more cold e-mail one personal address sends, the higher the
 risk of losing the account and its inbox. Watch the bounces and replies in `robot status` in the first days.
 
@@ -107,7 +112,11 @@ they send at the same time. Replies are read in every account's inbox; alerts go
 the last and next run of each job, and per city how many businesses it found and how many have an e-mail and a
 phone; its first line is the switch (`Switch: ON`). `robot log` shows today's log, `robot off` stops it (the job it
 is on saves first, up to 3 minutes, and runs again when the robot is back on), `robot run leads` runs a job now. A lead
-search or e-mail hunt that fails (no internet at 1 AM, say) runs again by itself 30 minutes later, twice. It starts again by itself after a restart of the tablet (Termux:Boot app) and within 15 minutes if
+search, e-mail hunt, e-mail run or update that fails (no internet at 1 AM, say) runs again by itself 10 minutes
+later, up to 3 times. Before each job the robot checks the internet and waits for it (up to 10 minutes); a short drop
+in the middle of a job (Wi-Fi switching, the router restarting) is waited for too, up to 10 minutes, and the job
+carries on where it stopped: an e-mail Gmail could not be reached for is sent again a minute later (5 times at most),
+and only a longer outage ends the job, which the robot then runs again. It starts again by itself after a restart of the tablet (Termux:Boot app) and within 15 minutes if
 Android closes it (Termux:API app); both apps are already there for Plant Parlour. Keep the tablet charging and on
 Wi-Fi, and Termux on **Battery: Unrestricted** and **Autostart: on** (Settings → Apps → Termux). More than one city a
 day: `ROBOT_CITIES_PER_DAY=2` in `settings`; a job off: `ROBOT_EMAILS=no` (or `ROBOT_LEADS=no`). Sending can also
