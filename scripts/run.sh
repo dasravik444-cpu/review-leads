@@ -3,6 +3,10 @@
 # COMMAND: check, leads, hunt, emails or import (scripts/local_run.py), or robot ... (scripts/robot.py).
 # The first time it makes settings.txt and installs what is needed.
 cd "$(dirname "$0")/.." || exit 1
+if [ "$1" = move ]; then                                 # moving to another device: needs nothing set up yet
+  shift
+  exec python3 scripts/move.py "$@"
+fi
 if [ ! -f settings.txt ]; then
   cp settings-example.txt settings.txt
   echo "Your settings file settings.txt opens now. Fill it in, save it, then run this again."

@@ -126,6 +126,14 @@ for the US, reaching the tablet with `update` or the robot's own daily update; I
 its e-mail): the robot then sends nothing, follow-ups included, but still reads replies
 and bounces, and `robot status` says **sending PAUSED**.
 
+**Moving the robot to a phone (or back).** Only one device may run it (two would e-mail the same businesses and go
+over Gmail's limit), and it must take its memory along, or it starts again: the city it already searched, the
+follow-ups, the sending plan, the bounces, the WhatsApp queue. On the device it runs on: `robot off`, then `move out`
+(everything, also your settings, Google key and PDF, goes into `review-leads-move.zip` in Download; that device's
+robot then stays off). Send the file to the other device with Quick Share (never by WhatsApp or e-mail: it holds your
+Gmail app passwords). There: Termux, the one-paste setup (step 2 above), `move in`, `check`, `robot on`. Back the
+same way. On mobile data: each e-mail carries the PDF (0.4 MB), so 800 e-mails are about 400 MB a day.
+
 **By hand instead:** `leads` finds businesses (3 cities, about 4½ hours; `leads --count 1` one city), `emails` sends
 this hour's share of the day's e-mails (India: **around the clock, every day**; US: about
 **8 PM - 3 AM India time** on US working days). A command typed

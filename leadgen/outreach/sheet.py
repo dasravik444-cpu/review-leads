@@ -92,6 +92,33 @@ class OutreachSheet:
         get = lambda col, i: str(col[i]).strip() if i < len(col) else ""  # noqa: E731
         return [(get(keys, i), get(nums, i), get(results, i)) for i in range(n)]
 
+    def drop_old_prices(self, offer: str) -> int:
+        """Messages still waiting in the WhatsApp Queue that were queued with the old price line: the same message
+        with today's line instead, in the Message and Open Chat cells (also for a tap on the link in the Sheet).
+        Returns how many were rewritten."""
+        from .wa_queue import OLD_PRICE_LINE, without_old_price
+
+        if not offer:
+            return 0
+        cols = TABS["whatsapp"]
+        m_col, l_col, r_col = (col_letter(cols.index(c)) for c in ("Message", "Open Chat", "Result"))
+        tab = self.ref("whatsapp")
+        msgs, links, results = self.c.batch_get_columns([f"{tab}!{m_col}2:{m_col}", f"{tab}!{l_col}2:{l_col}",
+                                                         f"{tab}!{r_col}2:{r_col}"])
+        get = lambda col, i: str(col[i]) if i < len(col) else ""  # noqa: E731
+        data = []
+        for i in range(max(len(msgs), len(links))):
+            msg, link = get(msgs, i), get(links, i)
+            new_link = without_old_price(link, offer)
+            if get(results, i).strip() or not (OLD_PRICE_LINE.search(msg) or new_link != link):
+                continue
+            new_msg = OLD_PRICE_LINE.sub(offer.replace("\\", "\\\\"), msg)
+            if (new_msg, new_link) != (msg, link):
+                data.append({"range": f"{tab}!{m_col}{i + 2}:{l_col}{i + 2}", "values": [[new_msg, new_link]]})
+        if data:
+            self.c.batch_update_values(data)
+        return len(data)
+
     def read_letter_results(self) -> list[tuple[str, str]]:
         """[(key, result cell)] for every letter row."""
         r_col, k_col = (col_letter(TABS["letters"].index(c)) for c in ("Result", "Key"))

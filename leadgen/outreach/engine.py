@@ -19,7 +19,7 @@ from pathlib import Path
 from .. import country
 from ..enrich.phones import display_phone, parse_phone
 from ..sheets import SheetsClient, SheetsError
-from ..util import fmt_local, get_logger, jdump, local_date, local_now
+from ..util import fmt_local, get_logger, jdump, local_now
 from . import plan as sending_plan
 from . import templates as T
 from .classify import snippet
@@ -39,6 +39,8 @@ NEXT_STEP = {"positive": "Send the free preview (WhatsApp link) and call them",
              "negative": "Removed - they will not be contacted again",
              "other": "Read the reply and answer it yourself"}
 NO_REPLY_AFTER_DAYS = 5
+WA_SENT = ("sent", "replied", "interested", "not_interested")      # WhatsApp results that mean it went out
+WA_STALE_DAYS = 14        # a queued WhatsApp message with no result after this long no longer holds anything back
 NETWORK_RETRIES, NETWORK_RETRY_S = 5, 60      # an e-mail Gmail could not be reached for: again after 1 minute, 5 times
 
 
@@ -189,6 +191,12 @@ class Outreach:
                 if self.whatsapp:
                     self._sync_whatsapp(sheet)
                     self._sync_letters(sheet)
+                    if not self.store.get("wa_prices_dropped"):     # once: the messages queued before 15 October
+                        n = sheet.drop_old_prices(str(self.o.get("offer") or ""))
+                        if n:
+                            self.notes.append(f"{n} waiting WhatsApp message(s) now without the old price line")
+                        if self.live:
+                            self.store.set("wa_prices_dropped", 1)
             except SheetsError as exc:
                 self.notes.append(f"Google Sheet error: {exc}")
                 return 2, self._summary("sheet error")
@@ -257,6 +265,8 @@ class Outreach:
             if not code or row["result"] == code:
                 continue
             self.store.conn.execute("UPDATE wa SET result=?, updated_at=? WHERE phone=?", (code, self.now(), p[0]))
+            if code in WA_SENT:
+                self.store.conn.execute("INSERT OR IGNORE INTO wa_sent(phone, day) VALUES(?,?)", (p[0], self._today()))
             self.stats["wa_done"] += 1
             lead = self.by_key.get(key)
             if code == "not_interested":
@@ -435,9 +445,8 @@ class Outreach:
             self._dry_run_login_check()
             return
         paused = float(self.store.get("paused_until", 0) or 0)
-        if paused > self.now() and str(self.store.get("pause_reason", "")).startswith("bounce rate") and \
-                not self.store.get("bounce_window_from"):
-            # A bounce pause of the version before (up to two days, then stopped again by the same old bounces):
+        if paused > self.now() and self._outdated_bounce_pause(str(self.store.get("pause_reason", ""))):
+            # A bounce pause the brake as set now would not have made (an earlier version paused two days, or at 5%):
             # ended now, and sending starts afresh, judged on the new e-mails only.
             self.store.set("paused_until", 0)
             self.store.set("bounce_window_from", self.now())
@@ -521,7 +530,12 @@ class Outreach:
         used_leads = {r["lead_key"] for r in self.store.q("SELECT DISTINCT lead_key FROM threads")}
         # One channel at a time: a business waiting in the WhatsApp Queue (it had no e-mail address when it was
         # queued; the e-mail hunt may have found one since) gets no e-mail on top, whichever account's queue it is in.
-        wa_waiting = "SELECT DISTINCT lead_key FROM wa WHERE result=''"
+        # (After WA_STALE_DAYS without a result - a row deleted from the tab, or one that never reached it - no longer.)
+        # A business messaged on WhatsApp gets no cold e-mail either (by any account, also before the Leads tab says
+        # "WhatsApp sent", which the account that queued it writes at the end of its run).
+        sent = ",".join(f"'{r}'" for r in WA_SENT)
+        wa_waiting = (f"SELECT DISTINCT lead_key FROM wa WHERE (result='' AND queued_day>='{self._wa_recent()}') "
+                      f"OR result IN ({sent})")
         used_leads |= {r["lead_key"] for r in self.store.q(wa_waiting)}
         used_domains = {r["domain"] for r in self.store.q("SELECT DISTINCT domain FROM threads WHERE domain IS NOT NULL")}
         try:
@@ -741,6 +755,19 @@ class Outreach:
         self.notes.append(f"SENDING PAUSED until {until.strftime('%Y-%m-%d %H:%M')}: {reason}")
         self.code = max(self.code, 2)
 
+    def _outdated_bounce_pause(self, reason: str) -> bool:
+        """A pause "bounce rate 8/113 ..." that the bounce brake's settings now would not make (or one of the
+        version before 13 October, which judged 7 days without a fresh start)."""
+        m = re.match(r"bounce rate (\d+)/(\d+)", reason)
+        if not m:
+            return False
+        if not self.store.get("bounce_window_from"):
+            return True
+        e = self.o["email"]
+        bad, sent = int(m.group(1)), int(m.group(2))
+        return not (sent >= e["pause_min_sends"] and bad >= int(e.get("pause_min_bounces") or 1)
+                    and bad / max(sent, 1) >= e["pause_bounce_rate"])
+
     def _bounce_window(self) -> tuple[int, int]:
         """(e-mails sent, bounced) over the last 7 days, but only since the last bounce pause ended: after a pause
         sending gets a fresh start, so it is judged again on what it sends from then on (at least pause_min_sends),
@@ -787,14 +814,23 @@ class Outreach:
         return [self._today(), lead.lead_id, lead.business, lead.category_label, lead.area, display_phone(phone),
                 REASONS[reason], text, wa_link(phone, text), "", lead.key]
 
+    def _wa_recent(self) -> str:
+        """The first day whose queued WhatsApp messages still count as waiting (older ones without a result were
+        deleted from the tab or never reached it)."""
+        return (self._local() - timedelta(days=WA_STALE_DAYS)).date().isoformat()
+
     def _wa_cap(self, today: str) -> int:
         """Warm-up for a new WhatsApp number: start small and grow with the days the owner actually sent messages."""
         w = self.o["whatsapp"]
-        # The days messages actually went out (when their results came in), not the days they were queued: three
-        # days' messages sent in one go are one day of sending, so a catch-up does not speed up the warm-up.
-        sent_days = {local_date(self.cfg.tz, r["updated_at"]) if r["updated_at"] else r["queued_day"]
-                     for r in self.store.q("SELECT queued_day, updated_at FROM wa WHERE queued_day!='' "
-                                           "AND result IN ('sent','replied','interested','not_interested')")}
+        # The days messages actually went out (the day each was first marked sent), not the days they were queued:
+        # three days' messages sent in one go are one day of sending, so a catch-up does not speed up the warm-up,
+        # and changing a result later (Sent -> Replied) is no day of sending. Messages marked before this was kept
+        # (16 October 2026) count on the day they were queued, as before.
+        marks = ",".join("?" * len(WA_SENT))
+        sent_days = {r["day"] for r in self.store.q("SELECT day FROM wa_sent")}
+        sent_days |= {r["queued_day"] for r in self.store.q(
+            f"SELECT queued_day FROM wa WHERE queued_day!='' AND result IN ({marks}) "
+            "AND phone NOT IN (SELECT phone FROM wa_sent)", WA_SENT)}
         days = len({d for d in sent_days if d and d < today})
         return min(w["max_per_day"], w["start_per_day"] + w["step"] * (days // w["step_every_days"]))
 
@@ -808,7 +844,8 @@ class Outreach:
         cap = self._wa_cap(today)
         if not w["enabled"] or cap <= 0 or not self.leads:
             return
-        pending = self.store.scalar("SELECT COUNT(*) FROM wa WHERE result='' AND reason!='opted_in'", (), 0)
+        pending = self.store.scalar("SELECT COUNT(*) FROM wa WHERE result='' AND reason!='opted_in' AND queued_day>=?",
+                                    (self._wa_recent(),), 0)
         added_today = self.store.scalar("SELECT COUNT(*) FROM wa WHERE queued_day=? AND reason!='opted_in'", (today,), 0)
         most = cap * max(1, int(w.get("max_waiting_days") or 1))
         room = max(0, min(cap - added_today, most - pending))

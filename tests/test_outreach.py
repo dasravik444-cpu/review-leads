@@ -916,6 +916,7 @@ def test_a_business_waiting_in_the_whatsapp_queue_is_not_emailed_on_top(tmp_path
                        "VALUES('+919830022222','key2','RQ-00002','Brew Corner','mobile','2026-10-13','',0)")
     runner(cfg_with(), store, client, clock, smtp, max_emails=2, also_stores=[str(tmp_path / "o2.sqlite")]).run()
     assert smtp.sent == []
+    other.conn.execute("UPDATE wa SET result='sent'")          # sent from account 1's queue: account 2 never e-mails it
     store.conn.execute("UPDATE wa SET result='not_on_whatsapp'")                          # not on WhatsApp after all
     clock.t = ts(2026, 10, 14, 12)
     runner(cfg_with(), store, client, clock, smtp, max_emails=2, also_stores=[str(tmp_path / "o2.sqlite")]).run()
@@ -952,3 +953,80 @@ def test_india_settings_send_400_a_day_per_account_at_9_percent_bounces_but_stop
     assert sent == 400 and not float(store.get("paused_until", 0) or 0)
     sent, store = india_day(tmp_path, 3)                        # a third of the addresses dead: the brake stops it
     assert sent <= 160 and float(store.get("paused_until", 0) or 0) > 0     # twice paused 12 hours: not 400
+
+
+def test_a_bounce_pause_the_brake_would_not_make_now_is_lifted_and_a_real_one_stays(tmp_path):
+    sess, client = sheet_with(plan_leads(5))
+    smtp, clock = SmtpWorld(), Clock(ts(2026, 10, 16, 2))
+    cfg = lambda: plan_cfg(plan=[[1, 40]], pause_bounce_rate=0.12, pause_min_sends=60, pause_min_bounces=8)  # noqa: E731
+    store = OutreachStore(str(tmp_path / "o.sqlite"))
+    store.set("paused_until", ts(2026, 10, 16, 8, 55))                     # paused at 5% by the version before
+    store.set("pause_reason", "bounce rate 8/113 is too high - check the e-mail addresses")
+    store.set("bounce_window_from", ts(2026, 10, 16, 8, 55))
+    code, s = runner(cfg(), store, client, clock, smtp, max_emails=2).run()
+    assert len(smtp.sent) == 2 and any("lifted" in n for n in s["notes"])
+    real = OutreachStore(str(tmp_path / "real.sqlite"))
+    real.set("paused_until", ts(2026, 10, 16, 8, 55))                      # 20% of 100: the brake now too
+    real.set("pause_reason", "bounce rate 20/100 is too high - check the e-mail addresses")
+    real.set("bounce_window_from", ts(2026, 10, 16, 8, 55))
+    smtp2 = SmtpWorld()
+    runner(cfg(), real, sheet_with(plan_leads(5))[1], clock, smtp2, max_emails=2).run()
+    assert smtp2.sent == [] and float(real.get("paused_until")) > clock.t
+
+
+def test_whatsapp_warm_up_counts_the_day_a_message_was_sent_not_the_days_its_result_changed(tmp_path):
+    leads = [lead(i, f"Shop {i}", whatsapp=f"+91 98300 000{i:02d}", priority="High") for i in range(1, 40)]
+    sess, client = sheet_with(leads)
+    smtp, clock = SmtpWorld(), Clock(ts(2026, 10, 14, 11))
+    store = OutreachStore(str(tmp_path / "o.sqlite"))
+    cfg = cfg_with()
+    cfg["outreach"]["whatsapp"].update(start_per_day=2, step=1, step_every_days=1, max_per_day=10, max_waiting_days=1)
+    run = lambda: runner(cfg, store, client, clock, smtp, live=False).run()  # noqa: E731
+    run()
+    rows = sess.tabs["WhatsApp Queue"]["rows"]
+    col = rows[0].index("Result")
+    rows[1][col] = rows[2][col] = "Sent"                                  # both sent on the 14th
+    clock.t = ts(2026, 10, 14, 15)
+    run()
+    for day, result in ((15, "Replied"), (16, "Interested")):              # later only the results change
+        rows[1][col] = result
+        clock.t = ts(2026, 10, day, 15)
+        run()
+        for r in rows[3:]:
+            if r[col] == "":
+                r[col] = "Skip"                                              # nothing else sent on those days
+    assert store.scalar("SELECT COUNT(*) FROM wa_sent", (), 0) == 2
+    assert runner(cfg, store, client, clock, smtp, live=False)._wa_cap("2026-10-17") == 3     # one day sent: +1
+
+
+def test_a_queued_message_without_a_result_for_two_weeks_no_longer_holds_the_business_back(tmp_path):
+    leads = [lead(1, "Leaf Cafe", email="hello@leafcafe.in", priority="High")]
+    sess, client = sheet_with(leads)
+    smtp, clock = SmtpWorld(), Clock(ts(2026, 10, 30, 11))
+    store = OutreachStore(str(tmp_path / "o.sqlite"))
+    store.conn.execute("INSERT INTO wa(phone,lead_key,lead_id,business,reason,queued_day,result,updated_at) "
+                       "VALUES('+919830011111','key1','RQ-00001','Leaf Cafe','mobile','2026-10-10','',0)")  # row deleted
+    runner(cfg_with(), store, client, clock, smtp, max_emails=1).run()
+    assert [m["To"] for m in smtp.sent] == ["hello@leafcafe.in"]
+
+
+def test_waiting_whatsapp_rows_in_the_sheet_lose_the_old_price_line_once(tmp_path):
+    from urllib.parse import unquote
+
+    from leadgen.outreach import wa_queue
+    from leadgen.outreach.whatsapp import wa_link
+
+    sess, client = sheet_with([])
+    old = "Hello team,\n\nIt's a one-time price from ₹3,000, no monthly fees. I've attached a two-page overview (PDF)."
+    row = lambda result: ["2026-10-14", "RQ-1", "Leaf Cafe", "", "", "+91 98300 11111", "", old,  # noqa: E731
+                          wa_link("+919830011111", old), result, "k1"]
+    sess.tabs["WhatsApp Queue"] = {"id": 3, "rows": [wa_queue.COLS, row(""), row("Sent")]}
+    cfg = cfg_with()
+    cfg["outreach"]["offer"] = "We also track your new Google reviews every month."
+    store = OutreachStore(str(tmp_path / "o.sqlite"))
+    code, s = runner(cfg, store, client, Clock(ts(2026, 10, 16, 11)), SmtpWorld(), max_emails=0).run()
+    rows = sess.tabs["WhatsApp Queue"]["rows"]
+    assert "₹" not in rows[1][7] and "every month. I've attached" in rows[1][7]
+    assert "₹" not in unquote(rows[1][8]) and rows[1][8].startswith("https://wa.me/919830011111?text=")
+    assert rows[2][7] == old                                               # one already sent: left as it was
+    assert any("without the old price line" in n for n in s["notes"]) and store.get("wa_prices_dropped")

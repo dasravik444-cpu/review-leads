@@ -428,6 +428,9 @@ def serve() -> int:
     except OSError:
         print("The robot is already running.")
         return ALREADY_RUNNING
+    if (DATA / "moved-out.txt").exists():          # move out: the memory is on another device; only one may run it
+        print("The robot's memory was moved to another device (move out): it does not run here until  move in .")
+        return ALREADY_RUNNING
     STOP.unlink(missing_ok=True)
     stopping = []
     for sig in (signal.SIGTERM, signal.SIGINT):

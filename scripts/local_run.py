@@ -660,7 +660,7 @@ def main(argv=None) -> int:
             return 2
     run = {"check": cmd_check, "leads": cmd_leads, "hunt": cmd_hunt, "emails": cmd_emails, "import": cmd_import,
            "whatsapp": cmd_whatsapp}[a.cmd]
-    if a.cmd in ("check", "whatsapp"):            # whatsapp only reads and writes single cells: no need to wait
+    if a.cmd in ("check", "whatsapp") or getattr(a, "resume", False):   # single cells / one setting: no need to wait
         return run(a)
     if a.cmd == "import":              # takes the lock itself, for the Sheet part only, and waits for it
         try:

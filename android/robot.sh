@@ -92,6 +92,11 @@ supervise() {
 
 start() {
   mkdir -p "$HOME_DIR"
+  if [ -f "$HOST_DIR/data/moved-out.txt" ]; then      # move out: the robot's memory is on another device now
+    echo "Not started: the robot's memory was moved to another device ($(cat "$HOST_DIR/data/moved-out.txt"))."
+    echo "Only one device may run it. To run it here again: move out there, send the file here, then  move in ."
+    return 1
+  fi
   rm -f "$STOPFLAG" "$HOST_DIR/data/robot.stop"
   if running; then
     echo "The robot is already on."
@@ -143,7 +148,8 @@ stop() {
 }
 
 switch_line() {
-  if [ -f "$STOPFLAG" ]; then
+  if [ -f "$HOST_DIR/data/moved-out.txt" ]; then echo "Switch: OFF - moved to another device ($(cat "$HOST_DIR/data/moved-out.txt"))"
+  elif [ -f "$STOPFLAG" ]; then
     if robot_alive; then echo "Switch: OFF - the robot finishes the step it is on, then stops"
     else echo "Switch: OFF (robot on starts it)"; fi
   elif robot_alive; then echo "Switch: ON"
@@ -152,7 +158,7 @@ switch_line() {
 }
 
 case "${1:-status}" in
-  on|start)   autostart; start ;;
+  on|start)   [ -f "$HOST_DIR/data/moved-out.txt" ] || autostart; start ;;
   off|stop)   stop ;;
   status)     switch_line; inside robot status ;;
   log|logs)   shift; inside robot log "$@" ;;

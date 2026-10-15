@@ -54,6 +54,9 @@ CREATE TABLE IF NOT EXISTS wa (
   updated_at REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS wa_lead ON wa(lead_key);
+-- the day each WhatsApp message was first marked sent (the warm-up counts these days; later changes of its result,
+-- e.g. Sent -> Replied, do not move it)
+CREATE TABLE IF NOT EXISTS wa_sent (phone TEXT PRIMARY KEY, day TEXT NOT NULL);
 """
 
 
