@@ -54,12 +54,13 @@ def test_india_city_files_premium_five_kinds_own_tabs_and_no_overlap():
     assert sorted(fleet["cities"]) == sorted(Path(f).stem for f in files)
 
 
-def test_india_outreach_has_its_own_tabs_rupee_offer_and_runs_every_day():
+def test_india_outreach_has_its_own_tabs_no_prices_and_runs_every_day():
     cfg = load_config(str(ROOT / "config" / "in" / "outreach.toml"))
     o = cfg["outreach"]
     assert o["tabs"]["outreach"] == "India Outreach" and o["tabs"]["whatsapp"] == "India WhatsApp Queue"
     assert o["tabs"]["dnc"] == "Do Not Contact"                      # shared with the US: a "no" counts everywhere
-    assert "₹3,000" in o["offer"] and "$" not in o["offer"]
+    # no price in what businesses read (15 October 2026): the offer line says what we do
+    assert o["offer"] == "We also track your new Google reviews every month."
     assert o["email"]["enabled"] is True                             # on since 11 October 2026
     assert o["email"]["days"] == ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
     e = o["email"]
@@ -69,6 +70,9 @@ def test_india_outreach_has_its_own_tabs_rupee_offer_and_runs_every_day():
     totals = [round(P.allowed(e["plan"], e["plan_then"], h)) for h in (6, 12, 18, 24, 48, 72, 96)]
     assert totals == [50, 125, 225, 325, 545, 820, 1220]
     assert e["max_per_24h"] == 400                                   # your ceiling (Gmail stops at ~500), follow-ups included
+    # the bounce brakes stop a bad batch, not a normal day: at ~9% bounces a whole day's 400 still goes out
+    assert (e["pause_bounce_rate"], e["pause_min_sends"], e["pause_min_bounces"]) == (0.12, 60, 8)
+    assert e["max_bounces_per_day"] >= 0.09 * e["max_per_24h"] and e["bounce_pause_hours"] == 12
     assert e["min_gap_seconds"] >= 60 and e["spread_minutes"] * 60 <= e["run_budget_minutes"] * 60
     assert e["max_per_run"] * e["min_gap_seconds"] <= e["run_budget_minutes"] * 60     # a full catch-up run fits too
     assert (e["window_start"], e["window_end"]) == ("00:00", "23:59")                  # around the clock

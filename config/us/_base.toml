@@ -106,7 +106,7 @@ use_curl_cffi = false
 
 [outreach]
 mode = "dry-run"
-offer = "It's a one-time price from $100, no monthly fees."
+offer = "We also track your new Google reviews every month."
 demo_url = ""
 privacy_url = ""
 

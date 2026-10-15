@@ -49,7 +49,7 @@ config/us/          the same for the US (MARKET=us in settings.txt; leadgen/mark
 config/shared/      the business types (categories.toml)
 config/examples/    single campaigns: UK, Australia, ...
 site/               customer pages: site.json (you), businesses/<id>.json (customers), build.py
-marketing/          the two-page sales PDF: pitch.pdf (US, $), pitch-in.pdf (India, ₹; build_pitch.py --market in)
+marketing/          the two-page sales PDF (no prices): pitch.pdf (US), pitch-in.pdf (India; build_pitch.py --market in)
 guests/             WhatsApp review requests to guests who agreed
 scripts/            make_in_cities.py, make_us_cities.py (city files), ci/ (fleet plan, encrypted state, probes)
 .github/workflows/  US fleet, outreach, tests, probes

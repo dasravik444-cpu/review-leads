@@ -78,7 +78,9 @@ DEFAULTS: dict = {
                   # too many bounces: sending pauses this long, then starts afresh (judged on new e-mails only)
                   "bounce_pause_hours": 12, "pause_min_bounces": 3,
                   "subjects": [], "first": "", "follow_ups": [], "footer": "", "attachment": ""},
+        # max_waiting_days: unsent messages of that many days stay waiting, each day's batch on top (1: one day's)
         "whatsapp": {"enabled": True, "start_per_day": 20, "step": 10, "step_every_days": 3, "max_per_day": 50,
+                     "max_waiting_days": 1,
                      # include_landlines: also try the other phone numbers (after the mobiles), one at a time
                      # same_as_email: the first e-mail's words (with "footer", default: reply STOP to stop)
                      "include_mobiles": True, "include_landlines": False, "message": "", "opted_in_message": "",

@@ -79,6 +79,10 @@ it itself. Prices in US dollars, paid by card or PayPal; the same in other Engli
 | **Starter** | Their QR code, linked straight to their Google review page; print-ready QR designs for tables, counter, window and receipts; review tracking: a report of new reviews and rating every month for 12 months | $100 |
 | **Pro** | Starter + review requests to their own customer list by WhatsApp and e-mail (up to 3 reminders), with their Google review link or a short feedback form | $200 |
 
+**15 October 2026: no prices in what businesses get to read.** The PDF, the e-mails and the WhatsApp messages
+describe the product only (no package prices, no "one-time", no competitors' prices): businesses were looking at
+the price instead of replying. The prices below are told to a business that asks (WhatsApp quick reply `/price`).
+
 **India (decided 10 October 2026):** the same two packages for premium cafés, restaurants, bars, bakeries, salons
 and gyms: **Starter ₹3,000, Pro ₹8,000**, one time (PDF: `marketing/pitch-in.pdf`). The India PDF also spells out
 the review tracking: every month for 12 months, how many new Google reviews they got and their total, their star

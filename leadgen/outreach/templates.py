@@ -45,7 +45,7 @@ Thanks,
     "follow_ups": [
         """{greeting}
 
-A quick follow-up on my note about Google reviews for {business}. Guests need no app, everyone is asked the same way (fully within Google's rules), and it's a one-time price, no subscription.
+A quick follow-up on my note about Google reviews for {business}. Guests need no app, everyone is asked the same way (fully within Google's rules), and we track your new reviews for you every month.
 
 Want me to send a free preview with your name on it? A one-word "yes" is enough.
 
@@ -66,7 +66,7 @@ WhatsApp/phone: {sender_phone}
 {source_line}
 Not interested? Just reply "no" and we won't write again.""",
     "source_line": "We found this address on your website or public listing; reply \"delete\" and we erase it.",
-    "offer": "It's a one-time price from $100, no monthly fees.",
+    "offer": "We also track your new Google reviews every month.",
     "attachment_note": "I've attached a two-page overview (PDF) with pictures of how it works.",
     "intro_usp": 'I came across {business} and liked this line on your website: "{usp}".',
     "intro_plain": "I came across {business} while looking at {audience} in {place}.",

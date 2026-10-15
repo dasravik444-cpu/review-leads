@@ -4,7 +4,7 @@
 #                         typed, you press Send there, come back to Termux and say how it went (saved in the Sheet);
 #                         then the same chat opens with the PDF ready, and you press Send again
 #   whatsapp list         only show what is waiting
-#   whatsapp --now        also outside office hours (India: 7 AM - 6:30 PM, every day)
+#   whatsapp --now        also outside office hours (India: 7 AM - 9 PM, every day)
 #   whatsapp --no-pdf     the messages without the PDF
 #   whatsapp pdf NUMBER   only the PDF, to one number (e.g. a business that got the message without it)
 #   whatsapp test NUMBER  a test message and the PDF to one number (e.g. your own): checks the Sheet, Termux and

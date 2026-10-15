@@ -90,8 +90,9 @@ US: 15 a day, rising by 5 every 3 sending days to 40.
 
 The brakes: never more than 400 from one account in any 24 hours (your ceiling; a free Gmail account is stopped for a
 day at about 500, which is Gmail's hard stop, not a safe level); sending pauses by itself when Gmail answers "limit" (a day) or "blocked" (two days),
-after 10 bounces in a day, and for 12 hours when at least 3 and 5% of at least 40 e-mails bounce (the **bounce
-brake**). After a bounce-brake pause sending starts afresh: it is judged again on the e-mails sent from then on, not
+after 50 bounces in a day, and for 12 hours when at least 8 and 12% of at least 60 e-mails bounce (the **bounce
+brake**; set on 15 October 2026 to stop a bad batch of addresses, not a normal day: at about 9% bounces each account
+still sends its 400). After a bounce-brake pause sending starts afresh: it is judged again on the e-mails sent from then on, not
 stopped again at once by the old bounces. `robot status` shows a pause (**Gmail account 1: sending PAUSED until ...**)
 and the addresses that bounced lately (each one is never e-mailed again); `emails --resume` ends a pause now. Addresses
 found on the business's own website go out first (they bounce least), those only an old copy of its website showed
@@ -126,18 +127,18 @@ its e-mail): the robot then sends nothing, follow-ups included, but still reads 
 and bounces, and `robot status` says **sending PAUSED**.
 
 **By hand instead:** `leads` finds businesses (3 cities, about 4½ hours; `leads --count 1` one city), `emails` sends
-this hour's share of the day's e-mails in office hours (India: **7 AM - 6:30 PM, every day**; US: about
+this hour's share of the day's e-mails (India: **around the clock, every day**; US: about
 **8 PM - 3 AM India time** on US working days). A command typed
 while the robot is on a job says so (`Busy: e-mail sending (the robot, since 22:09 India time)`): try again later.
 `import` instead waits for that job to finish and then runs by itself. `whatsapp` goes through today's WhatsApp
 messages, one tap each in WhatsApp Business (docs/WHATSAPP.md: the rules, the setup and the app's automatic replies). `update` gets the newest version of everything;
 after it, `robot off` and `robot on` once start the new version of the switch too.
 
-**Your PDF and lead lists from GitHub: `import`.** Each PDF carries an edition in its title (`IN-2026-10-11b`): your
+**Your PDF and lead lists from GitHub: `import`.** Each PDF carries an edition in its title (`IN-2026-10-15`): your
 own copy is attached only when it is the same edition as the newest PDF in the code, so an outdated copy is never
 sent (the newest from the code goes out instead, until you import your copy of it). Every first e-mail carries the 2-page Aurenflow PDF (named
-`Aurenflow-overview.pdf` in the e-mail): India gets the rupee version (`marketing/pitch-in.pdf`), the US the dollar
-one. Save your own copy, the one with your WhatsApp number (`Aurenflow-India-overview.pdf` for India,
+`Aurenflow-overview.pdf` in the e-mail): India gets the India version (`marketing/pitch-in.pdf`, with the monthly review report), the US its own
+one. Neither shows a price (since 15 October 2026): only the product. Save your own copy, the one with your WhatsApp number (`Aurenflow-India-overview.pdf` for India,
 `Aurenflow-overview.pdf` for the US), into the tablet's Download folder, then type `import`: from then on that one
 is attached. `import` also adds lead lists you downloaded from GitHub (`leads-<city>.zip`) to the Sheet:
 today's rules are applied again (big chains and addresses that are not the business's are left out), businesses

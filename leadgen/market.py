@@ -48,12 +48,12 @@ class Market:
 
 MARKETS = {
     # India: every day (restaurants, cafés, salons and gyms are open on Sundays too). E-mails around the clock, every
-    # hour, by your sending plan (11 October 2026: config/in/_base.toml [outreach.email] plan); WhatsApp messages in
-    # the daytime only, 7 AM - 6:30 PM.
+    # hour, by your sending plan (11 October 2026: config/in/_base.toml [outreach.email] plan); WhatsApp messages
+    # 7 AM - 9 PM (15 October 2026: restaurants, cafés and bars are open in the evening).
     "in": Market(code="in", name="India", tz=ZoneInfo("Asia/Kolkata"), place="India", days=(0, 1, 2, 3, 4, 5, 6),
-                 hours=(7.0, 18.5), email_slots=tuple(f"{h:02d}:05" for h in range(24)),
+                 hours=(7.0, 21.0), email_slots=tuple(f"{h:02d}:05" for h in range(24)),
                  outreach_db="outreach-in.sqlite", pdf_suffix="-in", own_pdfs=("Aurenflow-India-overview*.pdf",),
-                 india_time="7 AM - 6:30 PM, every day", email_hours=(0.0, 24.0)),
+                 india_time="7 AM - 9 PM, every day", email_hours=(0.0, 24.0)),
     "us": Market(code="us", name="the US", tz=ZoneInfo("America/Chicago"), place="Chicago", days=(0, 1, 2, 3, 4),
                  hours=(8.5, 16.5), email_slots=tuple(f"{h:02d}:35" for h in range(9, 16)),
                  outreach_db="outreach.sqlite", pdf_suffix="",

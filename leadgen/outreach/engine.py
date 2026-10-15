@@ -19,7 +19,7 @@ from pathlib import Path
 from .. import country
 from ..enrich.phones import display_phone, parse_phone
 from ..sheets import SheetsClient, SheetsError
-from ..util import fmt_local, get_logger, jdump, local_now
+from ..util import fmt_local, get_logger, jdump, local_date, local_now
 from . import plan as sending_plan
 from . import templates as T
 from .classify import snippet
@@ -519,10 +519,15 @@ class Outreach:
         # 2. new conversations, best leads first
         used_emails = {r["email"] for r in self.store.q("SELECT email FROM threads")}
         used_leads = {r["lead_key"] for r in self.store.q("SELECT DISTINCT lead_key FROM threads")}
+        # One channel at a time: a business waiting in the WhatsApp Queue (it had no e-mail address when it was
+        # queued; the e-mail hunt may have found one since) gets no e-mail on top, whichever account's queue it is in.
+        wa_waiting = "SELECT DISTINCT lead_key FROM wa WHERE result=''"
+        used_leads |= {r["lead_key"] for r in self.store.q(wa_waiting)}
         used_domains = {r["domain"] for r in self.store.q("SELECT DISTINCT domain FROM threads WHERE domain IS NOT NULL")}
         try:
             used_emails |= self._others("SELECT email FROM threads")
             used_leads |= self._others("SELECT DISTINCT lead_key FROM threads")
+            used_leads |= self._others(wa_waiting)
             used_domains |= self._others("SELECT DISTINCT domain FROM threads WHERE domain IS NOT NULL")
         except sqlite3.Error:
             return out              # the follow-ups only
@@ -785,12 +790,17 @@ class Outreach:
     def _wa_cap(self, today: str) -> int:
         """Warm-up for a new WhatsApp number: start small and grow with the days the owner actually sent messages."""
         w = self.o["whatsapp"]
-        days = self.store.scalar("SELECT COUNT(DISTINCT queued_day) FROM wa WHERE queued_day!='' AND queued_day<? "
-                                 "AND result IN ('sent','replied','interested','not_interested')", (today,), 0)
+        # The days messages actually went out (when their results came in), not the days they were queued: three
+        # days' messages sent in one go are one day of sending, so a catch-up does not speed up the warm-up.
+        sent_days = {local_date(self.cfg.tz, r["updated_at"]) if r["updated_at"] else r["queued_day"]
+                     for r in self.store.q("SELECT queued_day, updated_at FROM wa WHERE queued_day!='' "
+                                           "AND result IN ('sent','replied','interested','not_interested')")}
+        days = len({d for d in sent_days if d and d < today})
         return min(w["max_per_day"], w["start_per_day"] + w["step"] * (days // w["step_every_days"]))
 
     def _whatsapp_queue(self) -> None:
-        """Add new numbers up to today's limit: at most that many a day, and never more than that waiting."""
+        """Add today's batch of new numbers (today's limit). Messages not sent on earlier days stay in the queue and
+        today's come on top (a day missed: two days' messages are waiting), up to max_waiting_days days' worth."""
         w = self.o["whatsapp"]
         if self.rules.cold_whatsapp != "manual_queue":
             return          # unsolicited messages need consent here: only people who said yes are queued (_queue_opted_in)
@@ -800,7 +810,8 @@ class Outreach:
             return
         pending = self.store.scalar("SELECT COUNT(*) FROM wa WHERE result='' AND reason!='opted_in'", (), 0)
         added_today = self.store.scalar("SELECT COUNT(*) FROM wa WHERE queued_day=? AND reason!='opted_in'", (today,), 0)
-        room = max(0, min(cap - pending, cap - added_today))
+        most = cap * max(1, int(w.get("max_waiting_days") or 1))
+        room = max(0, min(cap - added_today, most - pending))
         if room == 0:
             return
         sup = {r["value"] for r in self.store.q("SELECT value FROM suppression")}

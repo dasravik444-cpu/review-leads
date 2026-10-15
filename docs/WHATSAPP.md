@@ -9,8 +9,12 @@ number first, then its mobiles, then its other numbers (landlines: some business
 the business's next number is queued on the robot's next run (within the hour); a business with no number left is
 simply passed over. Businesses with an e-mail address get the e-mail first; WhatsApp goes to those without one (and
 to those whose e-mails got no answer). A business you messaged is marked *WhatsApp sent* in the India Leads tab and
-gets no e-mail on top. Pace: **10 on the first day, 5 more after each day you actually sent, up to 40** a day. Send
-them **7 AM - 6:30 PM, every day** (Sunday too).
+gets no e-mail on top (also while it waits in the queue). Pace: **10 on the first day, 5 more after each day you
+actually sent, up to 40** a day. Send them **7 AM - 9 PM, every day** (Sunday too). **A day you don't send, its
+messages stay waiting** and the next day's come on top: `whatsapp` goes through all of them, businesses that said
+"yes" first, then the oldest (up to 7 days' worth waiting). A big pile in one go is the riskiest thing for a new
+number (WhatsApp bans numbers that many strangers report): when it is long, send part of it, `q`, and the rest
+later.
 
 **The message and the PDF.** The WhatsApp message is the first e-mail's text, with the business's name in it (and
 "reply STOP" at the end instead of the e-mail's "reply no"). After you sent it, the tablet opens the same chat with
@@ -69,10 +73,10 @@ WhatsApp number, for people who say yes, and for everyone who writes to you firs
    - businesses that publish a number as WhatsApp (on their website) and have no e-mail address, or whose e-mails
      got no answer;
    - leads who answered "yes" to an e-mail, at the top of the list, with the free-preview message.
-   It starts at 5 a day and adds 5 every 7 days you actually sent, up to 20, because a new number that writes a
-   lot of strangers is reported and banned. A number is never queued twice; "Not interested" or STOP puts it on
+   India: 10 a day to start, 5 more after each day you actually sent, up to 40 (a day you skip stays waiting, the
+   next day's come on top), because a new number that writes a lot of strangers is reported and banned. A number is never queued twice; "Not interested" or STOP puts it on
    the Do Not Contact list.
-2. **You type `whatsapp` on the tablet** in the businesses' office hours (India: 7 AM - 6:30 PM, every day;
+2. **You type `whatsapp` on the tablet** in the businesses' office hours (India: 7 AM - 9 PM, every day;
    US: about 8 PM - 2 AM India time on US working days; a message at night looks like spam). For each message, WhatsApp Business opens with the text typed; you
    press Send, switch back to Termux and press Enter (or `n` = not on WhatsApp, `s` = skip, `q` = stop for now).
    The result goes into the Sheet, and the robot reads it on its next run.
@@ -87,7 +91,9 @@ WhatsApp number, for people who say yes, and for everyone who writes to you firs
    - Name: **Aurenflow**. Profile picture: `marketing/brand/aurenflow-icon.png` (the square logo).
    - Category: *Marketing Agency* (or *Business Service*).
    - Description: "More Google reviews for restaurants, cafés, salons and shops: a QR code that opens your Google
-     review page in one scan. One-time price, no monthly fees."
+     review page in one scan, and a report of your new reviews every month." (No prices: since 15 October 2026 the
+     PDF, the e-mails and the WhatsApp messages talk about the product only. If your profile still says "One-time
+     price, no monthly fees", change it there.)
    - E-mail: the business Gmail. Hours: when you answer (for India for example 10 AM - 7 PM, every day).
 2. **WhatsApp Business on the tablet** (the `whatsapp` command opens chats there):
    - If the number's SIM is in another phone, use the tablet as a linked device: on the phone, WhatsApp Business →
@@ -109,7 +115,7 @@ WhatsApp number, for people who say yes, and for everyone who writes to you firs
      - `/preview`: "Here's how it works: we make your QR code, it opens your Google review page, your customers
        scan it at the table or counter, and we send you a report of your new reviews every month. Send me your
        business name and city and I'll make you a free preview with your name on it."
-     - `/price` (India): "Starter is ₹3,000, one time: your QR code linked to your Google review page, print-ready
+     - `/price` (India; only for a business that asks what it costs): "Starter is ₹3,000, one time: your QR code linked to your Google review page, print-ready
        designs for tables, counter, window and receipts, and for 12 months a monthly report: your new Google
        reviews, your rating, and what your Google profile brings you. Pro is ₹8,000, one time: everything in Starter
        plus review requests to your customer list by WhatsApp and e-mail. No monthly fees."
@@ -122,7 +128,7 @@ WhatsApp number, for people who say yes, and for everyone who writes to you firs
    - **Labels**: New lead, Preview sent, Interested, Paid, Not interested.
 5. **Your WhatsApp number in the settings** (it goes into the e-mail signature and your copy of the PDF): type
    `settings` and set `OUTREACH_SENDER_PHONE=+<country code and number>`, save (Ctrl+O, Enter, Ctrl+X).
-6. **Every day** in office hours (India: 7 AM - 6:30 PM): `whatsapp`, and answer what comes back.
+6. **Every day** in office hours (India: 7 AM - 9 PM): `whatsapp`, and answer what comes back.
 
 ## Later: answers by a machine
 

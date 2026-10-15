@@ -89,7 +89,7 @@ def test_the_command_prints_the_next_message_as_one_line_and_waits_for_office_ho
     assert fields == ["2", "k-", "+1 512-555-0101", "-", "Taco Town", "https://wa.me/15125550101?text=Hi"]
     monkeypatch.setattr(lr, "working_hours", lambda: (False, "Monday 02:00"))
     out = (run("list"), capsys.readouterr().out)
-    hours = "7 AM - 6:30 PM, every day" if market == "in" else "about 8 PM - 2 AM India time"
+    hours = "7 AM - 9 PM, every day" if market == "in" else "about 8 PM - 2 AM India time"
     assert out[0] == 4 and "outside office hours in" in out[1] and hours in out[1]
     assert run("list", "--now") == 0
     monkeypatch.setattr(lr, "working_hours", lambda: (True, "Monday 11:00"))
@@ -263,3 +263,32 @@ def test_the_tablet_keeps_going_when_the_sheet_or_a_key_press_goes_wrong(tmp_pat
     assert "Test sent: Termux, the Google Sheet and WhatsApp Business work together, the PDF too." in out.stdout
     out, _ = run("test", "987-654-3210", keys="n\n")
     assert "is not on WhatsApp: check the number" in out.stdout
+
+
+def test_next_gives_yes_replies_first_then_the_oldest_days_messages(monkeypatch, capsys):
+    def dated(day, *a, **k):
+        r = qrow(*a, **k)
+        r[0] = day
+        return r
+    sess, client = queue_sheet([dated("2026-10-16", "IN-3", "Day Three", "+91 98300 00003"),      # sorted by hand
+                                dated("2026-10-14", "IN-1", "Day One", "+91 98300 00001"),
+                                dated("2026-10-16", "IN-9", "Said Yes", "+91 98300 00009",
+                                      why="Replied 'yes' to our e-mail - send the free preview"),
+                                dated("2026-10-15", "IN-2", "Day Two", "+91 98300 00002")], "India WhatsApp Queue")
+    import leadgen.sheets
+
+    monkeypatch.setenv("MARKET", "in")
+    monkeypatch.setattr(leadgen.sheets, "SheetsClient", lambda *a, **k: client)
+    monkeypatch.setenv("RQ_SHEET_ID", "sheet")
+    lr = local_run()
+    order, skip = [], []
+    for _ in range(5):
+        args = type("A", (), {"action": "next", "skip": list(skip), "now": True})()
+        lr._whatsapp(args)
+        out = capsys.readouterr().out.strip()
+        if not out:
+            break
+        fields = out.split("\t")
+        order.append(fields[4])
+        skip.append(fields[2])
+    assert order == ["Said Yes", "Day One", "Day Two", "Day Three"]

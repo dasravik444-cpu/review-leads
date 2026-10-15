@@ -99,7 +99,7 @@ use_curl_cffi = false
 
 [outreach]
 mode = "dry-run"
-offer = "It's a one-time price from ₹3,000, no monthly fees."
+offer = "We also track your new Google reviews every month."   # what we do, no prices (15 October 2026)
 demo_url = ""
 privacy_url = ""
 
@@ -140,9 +140,13 @@ spread_minutes = 45        # each run's e-mails spread evenly over 45 minutes (1
 min_gap_seconds = 60       # ... never closer than a minute apart from one account ...
 max_gap_seconds = 300      # ... nor further than 5 minutes
 run_budget_minutes = 50    # a run stops in time for the next hour's
-max_bounces_per_day = 10   # more bounced addresses than this in a day: sending pauses until tomorrow
-pause_min_sends = 40       # the bounce brake: at least 3 bounces and 5% of at least 40 e-mails since the last pause:
-pause_min_bounces = 3      # then sending pauses 12 hours and starts afresh (judged on the new e-mails only)
+# The bounce brakes (15 October 2026: set so that they stop a clearly bad batch of addresses, not a normal day: at
+# 5% they paused both accounts after about 40 e-mails each, at a bounce rate of about 9%, far below your 400 a day).
+# Gmail's own answers still pause sending as before: "limit" for a day, "blocked" for two.
+max_bounces_per_day = 50   # more bounced addresses than this in a day: sending pauses until tomorrow
+pause_bounce_rate = 0.12   # 12% or more of at least 60 e-mails (and at least 8 bounces) since the last pause:
+pause_min_sends = 60       # sending pauses 12 hours and then starts afresh (judged on the new e-mails only)
+pause_min_bounces = 8
 bounce_pause_hours = 12
 window_start = "00:00"
 window_end = "23:59"
@@ -163,6 +167,9 @@ start_per_day = 10
 step = 5
 step_every_days = 1
 max_per_day = 40
+# A day you don't send (15 October 2026): its messages stay waiting and the next day's come on top, so  whatsapp
+# goes through all of them, oldest first (up to 7 days' worth waiting).
+max_waiting_days = 7
 include_mobiles = true
 include_landlines = true
 # The message: the same words as the first e-mail, with the business's name in them, then the PDF (the tablet sends

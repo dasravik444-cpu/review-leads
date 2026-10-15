@@ -167,7 +167,7 @@ def next_cities(n: int, cities: list[str] | None = None, done_elsewhere: list[st
 
 def working_hours(now: datetime | None = None) -> tuple[bool, str]:
     """The businesses' office hours in the market, for WhatsApp (US: Chicago 08:30-16:30 Mon-Fri; India: 7 AM -
-    6:30 PM every day)."""
+    9 PM every day)."""
     return market().is_working_time(now)
 
 
@@ -560,7 +560,7 @@ def _whatsapp(a) -> int:
     sys.path.insert(0, str(ROOT))
     from leadgen.config import load_config
     from leadgen.outreach import wa_queue
-    from leadgen.outreach.whatsapp import wa_link
+    from leadgen.outreach.whatsapp import REASONS, wa_link
     from leadgen.sheets import SheetsClient
 
     cfg = load_config(str(ROOT / conf("outreach")))
@@ -583,7 +583,10 @@ def _whatsapp(a) -> int:
         row = wa_queue.mark(client, tab, a.row, "" if a.key == "-" else a.key, a.number, a.result)
         print(f"Saved: {a.result}" if row else "That message is no longer in the WhatsApp Queue tab - nothing saved.")
         return 0 if row else 1
-    items = wa_queue.pending(client, tab)
+    items = wa_queue.pending(client, tab, cfg["outreach"].get("offer", ""))
+    # Businesses that said yes first (they are waiting for their preview), then the oldest messages: a day you did
+    # not send comes before the next day's (also after the tab was sorted by hand).
+    items.sort(key=lambda it: (it["why"] != REASONS["opted_in"], it["date"] or "9999"))
     if a.action == "next":
         digits = lambda n: "".join(ch for ch in str(n) if ch.isdigit())  # noqa: E731
         skip = {digits(n) for n in (a.skip or [])}

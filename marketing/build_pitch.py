@@ -1,8 +1,8 @@
 """The sales PDF for businesses: two pages, US Letter.
 
     python marketing/build_pitch.py                      # -> marketing/pitch.pdf (details from marketing/pitch.json)
-    python marketing/build_pitch.py --market in          # -> marketing/pitch-in.pdf: the India version (rupee prices
-                                                         #    and the monthly review report; "markets" in pitch.json)
+    python marketing/build_pitch.py --market in          # -> marketing/pitch-in.pdf: the India version (with the
+                                                         #    monthly review report; "markets" in pitch.json)
     python marketing/build_pitch.py --png                # also page images, to check the layout
     python marketing/build_pitch.py --phone "+1 ..."     # override a detail for one build
     python marketing/build_pitch.py --brand-files        # also the logo as pictures (marketing/brand/)
@@ -422,8 +422,6 @@ h2 {{ font-family: PitchInter, Inter, sans-serif; font-size: 21px; letter-spacin
                 letter-spacing: .06em; padding: 3px 8px; border-radius: 99px; }}
 .price h4 {{ font-size: 13.5px; font-weight: 800; }}
 .price .for {{ font-size: 10.2px; color: {MUTED}; margin-top: 1px; }}
-.price .amt {{ font-family: PitchInter, Inter, sans-serif; font-size: 24px; font-weight: 800; letter-spacing: -.02em; color: {NAVY}; margin-top: 1px; }}
-.price .amt small {{ font-family: PitchInter, Inter, sans-serif; font-size: 10.5px; font-weight: 600; color: {MUTED}; letter-spacing: 0; margin-left: 4px; }}
 .price ul {{ list-style: none; margin-top: 3px; }}
 .price li {{ font-size: 10.8px; color: #334155; padding-left: 16px; position: relative; line-height: 1.34; margin-top: 2px; }}
 .price li b {{ color: {INK}; }}
@@ -508,7 +506,6 @@ any time).</div></div>"""
 
 def build_html(d: dict) -> str:
     brand, business = d["brand"], d.get("example_business") or "Joe's Diner"
-    starter, pro = d.get("price_starter") or "$100", d.get("price_pro") or "$200"
     reports = bool(d.get("review_report"))
     name, email, phone_no = d.get("name", ""), d.get("email", ""), d.get("phone", "")
     qr_demo = d.get("qr_demo") or "https://example.com/"
@@ -599,16 +596,15 @@ feedback form, on WhatsApp and e-mail, and follow up for you.</div>
 <li class="stop"><b>Reply STOP, and it stops</b>Only customers who agreed to hear from you.</li>
 </ol></div></div>
 {report_section() if reports else ""}
-<div class="sec"><div class="row"><h2>One-time price. No monthly fees.</h2>
-<div class="sub nowrap">{esc(d.get("competitors") or "Leading review platforms start at $299–$399 a month.")}</div></div>
+<div class="sec"><h2>What you get</h2>
 <div class="prices">
 <div class="price"><h4>Starter</h4><div class="for">More reviews from the customers in front of you</div>
-<div class="amt">{esc(starter)}<small>one-time</small></div><ul>
+<ul>
 <li><b>Your QR code</b>, linked straight to your Google review page</li>
 <li>Print-ready QR designs for tables, counter, window and receipts: print them anywhere</li>
 <li><b>Review tracking:</b> a report of your new reviews and rating every month for 12 months</li></ul></div>
 <div class="price pop"><span class="badge">MOST POPULAR</span><h4>Pro</h4><div class="for">Also reaches the customers who already left</div>
-<div class="amt">{esc(pro)}<small>one-time</small></div><ul>
+<ul>
 <li><b>Everything in Starter</b></li>
 <li><b>WhatsApp and e-mail review requests</b> to your customer list, with up to 3 friendly reminders</li>
 <li>Your Google review link or a short feedback form: your choice</li></ul></div>

@@ -226,7 +226,8 @@ def test_first_email_carries_the_pdf_and_a_manual_test_goes_out_after_hours(tmp_
     assert [(a.get_filename(), a.get_content_type(), a.get_content()) for a in first.iter_attachments()] == \
         [("Green-Supply-Co-overview.pdf", "application/pdf", b"%PDF-1.4 two pages")]   # named after the sender's brand
     text = body_text(first)
-    assert "attached a two-page overview (PDF)" in text and "$100" in text and "Ravi" in text
+    assert "attached a two-page overview (PDF)" in text and "Ravi" in text
+    assert "$" not in text and "price" not in text and "one-time" not in text       # no prices (15 October 2026)
     assert "stand" not in text and "tap" not in text.replace("taps", "")         # a QR code only: nothing is shipped
     # three days later: the follow-up carries no attachment, a new first e-mail does
     later = Clock(datetime(2026, 10, 12, 16, 0, tzinfo=tz).timestamp())           # last run of the day: all due go out
