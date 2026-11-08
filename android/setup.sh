@@ -11,6 +11,7 @@
 #   emails    send this hour's e-mails (India: around the clock, every day)
 #   import    lead lists from GitHub (leads-<city>.zip) and your PDF, from your Download folder
 #   update    get the newest version of the robot
+#   report    e-mails sent per day, bounces, replies (interested / middle / no) and who replied
 #   move      out | in: the robot with all it knows to another device (a phone) and back (scripts/move.py)
 #   robot     on | off | status | log: the robot that finds leads and sends e-mails by itself (android/robot.sh)
 #   whatsapp  today's WhatsApp messages, one tap each in WhatsApp Business (android/whatsapp.sh);
@@ -123,7 +124,7 @@ main() {
 
   echo "== 5/5 The short commands..."
   # Each command is a tiny script in Termux that runs the matching step inside Ubuntu.
-  for cmd in getkey settings check leads emails import update move; do
+  for cmd in getkey settings check leads emails import update move report; do
     {
       echo "#!$PREFIX/bin/bash"
       case "$cmd" in

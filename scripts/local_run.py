@@ -29,7 +29,7 @@ import subprocess
 import sys
 import time
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -481,6 +481,94 @@ def download_folders() -> list[Path]:
     return out
 
 
+REPLY_KINDS = {"positive": "interested", "other": "in the middle", "negative": "not interested"}
+
+
+def report_data(days: int = 14, now: datetime | None = None) -> dict:
+    """What the e-mails did, from every Gmail account's memory (read only): per day the e-mails sent (first and
+    follow-up), bounced and delivered, and the replies by kind; and every reply with who sent it. Opens are not
+    counted: the e-mails carry no tracking pixel (it would send them to spam), so nothing tells us."""
+    tz = market().tz
+    now = now or datetime.now(tz)
+    addrs = [a for a, _ in gmail_accounts()] or [os.environ.get("OUTREACH_GMAIL_ADDRESS", "")]
+    per_day: dict[str, dict] = {}
+    replies: list[dict] = []
+    blank = lambda: {"first": 0, "followup": 0, "bounced": 0, "positive": 0, "other": 0, "negative": 0}  # noqa: E731
+    for i in range(1, 4):
+        db = account_db(i)
+        if not db.is_file():
+            continue
+        account = addrs[i - 1] if i - 1 < len(addrs) and addrs[i - 1] else f"Gmail account {i}"
+        con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+        try:
+            for day, step, status in con.execute("SELECT day, step, status FROM sends"):
+                d = per_day.setdefault(day, blank())
+                if status in ("sent", "invalid"):
+                    d["first" if step <= 1 else "followup"] += 1
+                if status in ("invalid", "bounced"):
+                    d["bounced"] += 1
+            names = {e: (b or "", lid or "") for e, b, lid in con.execute("SELECT email, business, lead_id FROM threads")}
+            for email, kind, at, text in con.execute("SELECT email, kind, received_at, snippet FROM replies "
+                                                     "ORDER BY received_at"):
+                if kind not in REPLY_KINDS:
+                    continue
+                day = datetime.fromtimestamp(at, tz).date().isoformat()
+                per_day.setdefault(day, blank())[kind] += 1
+                business, lead_id = names.get(email, ("", ""))
+                replies.append({"date": datetime.fromtimestamp(at, tz).strftime("%Y-%m-%d %H:%M"), "kind": kind,
+                                "their_email": email or "", "business": business, "lead_id": lead_id,
+                                "our_account": account, "reply": " ".join(str(text or "").split())})
+        except sqlite3.Error:
+            pass
+        finally:
+            con.close()
+    first_day = (now.date() - timedelta(days=max(1, days) - 1)).isoformat()
+    shown = {d: v for d, v in sorted(per_day.items()) if d >= first_day}
+    total = blank()
+    for v in per_day.values():
+        for k in total:
+            total[k] += v[k]
+    return {"days": shown, "total": total, "replies": replies}
+
+
+def cmd_report(a) -> int:
+    r = report_data(a.days)
+    line = lambda c: "  ".join(f"{x:>{w}}" if j else f"{x:<{w}}" for j, (x, w) in enumerate(zip(c, WIDTHS)))  # noqa: E731
+    head = ["Date", "Sent", "First", "Follow-up", "Bounced", "Delivered", "Replies", "Interested", "Middle", "No"]
+
+    def row(label: str, v: dict) -> list:
+        sent = v["first"] + v["followup"]
+        return [label, sent, v["first"], v["followup"], v["bounced"], max(0, sent - v["bounced"]),
+                v["positive"] + v["other"] + v["negative"], v["positive"], v["other"], v["negative"]]
+    print(f"E-mails per day, all Gmail accounts together (last {a.days} days; opens cannot be counted - the e-mails "
+          "carry no tracking pixel):\n")
+    print(line(head))
+    for day, v in r["days"].items():
+        print(line(row(day, v)))
+    print(line(row("All days", r["total"])))
+    for kind in ("positive", "other") + (("negative",) if a.all else ()):
+        items = [x for x in r["replies"] if x["kind"] == kind]
+        print(f"\n{REPLY_KINDS[kind].capitalize()} replies ({len(items)}):" + ("" if items else " none yet"))
+        for x in reversed(items):
+            print(f"  {x['date']}  {x['their_email']}  {x['business']} {x['lead_id']}".rstrip())
+            print(f"      to {x['our_account']}: \"{x['reply'][:160]}\"")
+    folders = download_folders()
+    if folders and r["replies"]:
+        out = folders[0] / "aurenflow-replies.csv"
+        with out.open("w", newline="", encoding="utf-8") as fh:
+            w = csv.DictWriter(fh, ["date", "kind", "their_email", "business", "lead_id", "our_account", "reply"])
+            w.writeheader()
+            for x in r["replies"]:
+                w.writerow({**x, "kind": REPLY_KINDS[x["kind"]]})
+        print(f"\nAll replies are also in {out} (opens in Google Sheets; add your own notes there).")
+    print("\nTo answer them: the India Replies tab in your Sheet has every reply with its next step; reply from the "
+          "Gmail account shown after \"to\".")
+    return 0
+
+
+WIDTHS = (10, 5, 5, 9, 7, 9, 7, 10, 6, 3)
+
+
 def cmd_import(a) -> int:
     folders = [Path(f) for f in a.folder] if a.folder else download_folders()
     found = lambda pattern: sorted({f for d in folders for f in d.glob(pattern) if f.is_file()},  # noqa: E731
@@ -612,6 +700,9 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("check", help="test the keys in .env (Google Sheet and Gmail)")
+    rp = sub.add_parser("report", help="e-mails sent per day, bounces, replies (interested / middle / no) and who replied")
+    rp.add_argument("--days", type=int, default=14, help="how many days to show (default 14)")
+    rp.add_argument("--all", action="store_true", help="also list the 'not interested' replies")
     le = sub.add_parser("leads", help="find businesses in the next cities and look for their e-mail addresses")
     le.add_argument("--count", type=int, default=3, help="how many cities this time (default 3)")
     le.add_argument("--cities", default="", help="these cities instead, e.g. kolkata,mumbai")
@@ -650,6 +741,8 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     DATA.mkdir(exist_ok=True)
     missing = load_env(ROOT / "settings.txt", ROOT / ".env")
+    if a.cmd == "report":                          # reads this device's memory only: no keys, no lock needed
+        return cmd_report(a)
     if missing:
         names = [("the Google key file (.json) in the secrets folder" if k == "GOOGLE_SERVICE_ACCOUNT_FILE" else k)
                  for k in missing]

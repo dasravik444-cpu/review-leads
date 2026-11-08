@@ -126,6 +126,8 @@ for the US, reaching the tablet with `update` or the robot's own daily update; I
 its e-mail): the robot then sends nothing, follow-ups included, but still reads replies
 and bounces, and `robot status` says **sending PAUSED**.
 
+**How the e-mails are doing: `report`.** E-mails sent per day (first and follow-up), bounced, delivered, and the replies per day: interested, in the middle (a question, "how much?") and not interested; then every interested and in-the-middle reply with the business's e-mail address, the business, which of your Gmail accounts got it and what they wrote (`report --days 30` for a month, `report --all` also lists the "no"s). All replies also go into `aurenflow-replies.csv` in Download (opens in Google Sheets: add your notes there). Opens cannot be counted: the e-mails carry no tracking pixel, which would send them to spam.
+
 **Moving the robot to a phone (or back).** Only one device may run it (two would e-mail the same businesses and go
 over Gmail's limit), and it must take its memory along, or it starts again: the city it already searched, the
 follow-ups, the sending plan, the bounces, the WhatsApp queue. On the device it runs on: `robot off`, then `move out`

@@ -39,7 +39,7 @@ case "$cmd" in
   move)                                 # the robot to another device and back (scripts/move.py)
     exec bash scripts/run.sh move "$@"
     ;;
-  check|leads|hunt|emails|import|whatsapp)
+  check|leads|hunt|emails|import|whatsapp|report)
     bash android/dns.sh
     exec bash scripts/run.sh "$cmd" "$@"
     ;;
@@ -51,7 +51,7 @@ case "$cmd" in
     git pull --ff-only
     ;;
   *)
-    echo "usage: inside.sh getkey|settings|check|leads|hunt|emails|import|whatsapp|robot|update|move"
+    echo "usage: inside.sh getkey|settings|check|leads|hunt|emails|import|whatsapp|robot|update|move|report"
     exit 2
     ;;
 esac

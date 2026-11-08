@@ -112,7 +112,10 @@ def test_the_robot_does_not_run_on_a_device_whose_memory_moved_out(tmp_path, mon
 
 @pytest.mark.parametrize("cmd", ["move"])
 def test_the_tablet_commands_include_move_and_it_needs_no_settings(cmd):
-    assert f" {cmd}; do" in (ROOT / "android" / "setup.sh").read_text()
+    import re
+
+    words = re.search(r"for cmd in ([a-z ]+); do", (ROOT / "android" / "setup.sh").read_text()).group(1).split()
+    assert cmd in words and "report" in words
     assert f"  {cmd})" in (ROOT / "android" / "inside.sh").read_text()
     run = (ROOT / "scripts" / "run.sh").read_text()
     assert run.index('if [ "$1" = move ]') < run.index("if [ ! -f settings.txt ]")
