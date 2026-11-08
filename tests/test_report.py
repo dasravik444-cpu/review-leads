@@ -45,9 +45,67 @@ def test_report_counts_each_day_and_lists_who_replied(tmp_path, monkeypatch, cap
     assert r["days"]["2026-11-07"] == {"first": 0, "followup": 2, "bounced": 2, "positive": 1, "other": 1, "negative": 0}
     assert [(x["kind"], x["their_email"], x["our_account"], x["business"]) for x in r["replies"]] == [
         ("positive", "owner@leafcafe.in", "one@gmail.com", "Cafe 1"), ("other", "hi@brew.in", "two@gmail.com", "Cafe 2")]
-    assert lr.cmd_report(type("A", (), {"days": 14, "all": False})()) == 0
+    import leadgen.outreach.inbox as inbox
+
+    class Gmail:                      # you answered Cafe 1 by e-mail; Cafe 2's question you opened but did not answer
+        def __init__(self, addr, pw):
+            self.addr = addr
+
+        def answered(self, items):
+            return {e: ({"seen": True, "answered": True} if self.addr == "one@gmail.com" else
+                        {"seen": True, "answered": False}) for e, _u, _t in items}
+    monkeypatch.setattr(inbox, "GmailInbox", Gmail)
+    assert lr.cmd_report(type("A", (), {"days": 14, "all": False, "offline": False})()) == 0
     out = capsys.readouterr().out
-    assert "Interested replies (1):" in out and "owner@leafcafe.in" in out and "to one@gmail.com" in out
-    assert "In the middle replies (1):" in out and "How much does it cost?" in out
-    assert "Out of office" not in out
-    assert (tmp_path / "Download" / "aurenflow-replies.csv").read_text().count("\n") == 3
+    assert "Replies since day one: 2 people - 1 answered by you, 1 still waiting for your answer." in out
+    assert "Not answered yet - interested (0): none" in out
+    assert "Not answered yet - in the middle (1):" in out and "hi@brew.in" in out and "to two@gmail.com, opened" in out
+    assert "How much does it cost?" in out and "owner@leafcafe.in" not in out and "Out of office" not in out
+    csv_text = (tmp_path / "Download" / "aurenflow-replies.csv").read_text()
+    assert csv_text.count("\n") == 3 and "answered,opened" in csv_text
+    assert lr.cmd_report(type("A", (), {"days": 14, "all": False, "offline": True})()) == 0     # no Gmail look
+    out = capsys.readouterr().out
+    assert "2 still waiting" in out and "Gmail not checked" in out and "owner@leafcafe.in" in out
+
+
+def test_gmail_says_who_you_answered_and_which_replies_you_opened():
+    from email.utils import format_datetime
+
+    from leadgen.outreach.inbox import GmailInbox
+
+    reply_at = ts(7, 15)
+    sent = {"owner@leafcafe.in": [(501, ts(7, 18))], "hi@brew.in": [(502, ts(6, 9))]}    # Brew: only our 1st e-mail
+
+    class Conn:
+        def __init__(self):
+            self.box = ""
+
+        def login(self, u, p):
+            return "OK", [b""]
+
+        def select(self, box, readonly=False):
+            self.box = box
+            return "OK", [b"1"]
+
+        def list(self):
+            return "OK", [b'(\\HasNoChildren) "/" "INBOX"', b'(\\HasNoChildren \\Sent) "/" "[Gmail]/Sent Mail"']
+
+        def uid(self, cmd, *args):
+            if cmd == "FETCH" and args[1] == "(FLAGS)":
+                flags = "\\Seen" if args[0] == "11" else ""
+                return "OK", [f"1 (UID {args[0]} FLAGS ({flags}))".encode()]
+            if cmd == "SEARCH":
+                addr = args[2].strip('"')
+                return "OK", [" ".join(str(u) for u, _ in sent[addr]).encode()]
+            if cmd == "FETCH":
+                when = next(t for v in sent.values() for u, t in v if str(u) == args[0])
+                head = f"Date: {format_datetime(datetime.fromtimestamp(when, IST))}\r\n\r\n".encode()
+                return "OK", [(b"1 (UID x BODY[HEADER.FIELDS (DATE)] {40}", head), b")"]
+            raise AssertionError(cmd)
+
+        def logout(self):
+            pass
+    got = GmailInbox("one@gmail.com", "pw", imap_factory=Conn).answered(
+        [("owner@leafcafe.in", 11, reply_at), ("hi@brew.in", 12, reply_at)])
+    assert got == {"owner@leafcafe.in": {"seen": True, "answered": True},
+                   "hi@brew.in": {"seen": False, "answered": False}}

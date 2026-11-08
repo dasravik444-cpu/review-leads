@@ -106,6 +106,67 @@ class GmailInbox:
             except Exception:
                 pass
 
+    def answered(self, replies: list[tuple[str, int, float]]) -> dict[str, dict]:
+        """For each reply (their address, its UID in the inbox, when it came): {"seen": you opened it in Gmail,
+        "answered": your Sent folder has an e-mail to that address dated after it}. Read-only: nothing is marked
+        or moved (the robot itself only ever peeks, so "seen" is yours alone)."""
+        from datetime import datetime, timezone
+        from email.utils import parsedate_to_datetime
+
+        out: dict[str, dict] = {}
+        m = self.factory()
+        try:
+            m.login(self.address, self.password)
+            typ, _ = m.select("INBOX", readonly=True)
+            if typ != "OK":
+                raise imaplib.IMAP4.error("cannot open INBOX")
+            for addr, uid, _at in replies:
+                seen = None
+                if uid:
+                    typ, data = m.uid("FETCH", str(uid), "(FLAGS)")
+                    flags = " ".join(x.decode("latin-1") if isinstance(x, bytes) else str(x) for x in (data or []) if x)
+                    if "FLAGS" in flags:
+                        seen = "\\Seen" in flags
+                out[addr] = {"seen": seen, "answered": False}
+            sent = self._sent_folder(m)
+            if sent is None or m.select(f'"{sent}"', readonly=True)[0] != "OK":
+                for v in out.values():
+                    v["answered"] = None
+                return out
+            for addr, _uid, at in replies:
+                since = datetime.fromtimestamp(at, timezone.utc).strftime("%d-%b-%Y")
+                typ, data = m.uid("SEARCH", None, "TO", f'"{addr}"', "SINCE", since)
+                uids = (data[0] or b"").split() if typ == "OK" and data else []
+                for u in uids[-20:]:
+                    typ, hd = m.uid("FETCH", u.decode() if isinstance(u, bytes) else str(u),
+                                    "(BODY.PEEK[HEADER.FIELDS (DATE)])")
+                    raw = next((x[1] for x in hd or [] if isinstance(x, tuple)), b"")
+                    try:
+                        when = parsedate_to_datetime(_headers(raw).get("date", "")).timestamp()
+                    except (TypeError, ValueError):
+                        continue
+                    if when > at:
+                        out[addr]["answered"] = True
+                        break
+            return out
+        finally:
+            try:
+                m.logout()
+            except Exception:
+                pass
+
+    @staticmethod
+    def _sent_folder(m) -> str | None:
+        """Gmail's Sent folder, whatever the account's language ("[Gmail]/Sent Mail" in English)."""
+        typ, data = m.list()
+        for item in data or []:
+            line = item.decode("utf-8", "replace") if isinstance(item, bytes) else str(item)
+            if "\\Sent" in line:
+                found = re.search(r'"([^"]+)"\s*$', line) or re.search(r"(\S+)\s*$", line)
+                if found:
+                    return found.group(1)
+        return None
+
     def _consider(self, m, uid: int, size: int, h: dict, known_emails: set[str], known_msgids: dict[str, str]) -> list[InboxEvent]:
         sender = parseaddr(h.get("from", ""))[1].lower()
         subject = h.get("subject", "")

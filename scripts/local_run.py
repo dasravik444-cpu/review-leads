@@ -508,8 +508,8 @@ def report_data(days: int = 14, now: datetime | None = None) -> dict:
                 if status in ("invalid", "bounced"):
                     d["bounced"] += 1
             names = {e: (b or "", lid or "") for e, b, lid in con.execute("SELECT email, business, lead_id FROM threads")}
-            for email, kind, at, text in con.execute("SELECT email, kind, received_at, snippet FROM replies "
-                                                     "ORDER BY received_at"):
+            for email, kind, at, text, uid in con.execute("SELECT email, kind, received_at, snippet, imap_uid FROM "
+                                                          "replies ORDER BY received_at"):
                 if kind not in REPLY_KINDS:
                     continue
                 day = datetime.fromtimestamp(at, tz).date().isoformat()
@@ -517,7 +517,8 @@ def report_data(days: int = 14, now: datetime | None = None) -> dict:
                 business, lead_id = names.get(email, ("", ""))
                 replies.append({"date": datetime.fromtimestamp(at, tz).strftime("%Y-%m-%d %H:%M"), "kind": kind,
                                 "their_email": email or "", "business": business, "lead_id": lead_id,
-                                "our_account": account, "reply": " ".join(str(text or "").split())})
+                                "our_account": account, "reply": " ".join(str(text or "").split()),
+                                "account": i, "at": float(at), "uid": int(uid or 0)})
         except sqlite3.Error:
             pass
         finally:
@@ -529,6 +530,42 @@ def report_data(days: int = 14, now: datetime | None = None) -> dict:
         for k in total:
             total[k] += v[k]
     return {"days": shown, "total": total, "replies": replies}
+
+
+def latest_replies(replies: list[dict]) -> list[dict]:
+    """One entry per person and Gmail account: their latest reply (its kind counts)."""
+    last: dict[tuple, dict] = {}
+    for x in replies:
+        last[(x["their_email"], x["account"])] = x
+    return sorted(last.values(), key=lambda x: x["at"])
+
+
+def reply_status(people: list[dict], offline: bool = False) -> bool:
+    """Look in each Gmail account (read-only) whether you answered each reply and opened it: sets "answered" and
+    "seen" on each entry. False when Gmail could not be checked (then nothing is marked answered)."""
+    if offline or not people:
+        return not people
+    from leadgen.outreach.inbox import GmailInbox
+
+    accounts = gmail_accounts() or [(os.environ.get("OUTREACH_GMAIL_ADDRESS", ""),
+                                     os.environ.get("OUTREACH_GMAIL_APP_PASSWORD", ""))]
+    ok = True
+    for i, (addr, pw) in enumerate(accounts, start=1):
+        mine = [x for x in people if x["account"] == i]
+        if not mine:
+            continue
+        if not (addr and pw):
+            ok = False
+            continue
+        try:
+            status = GmailInbox(addr, pw).answered([(x["their_email"], x["uid"], x["at"]) for x in mine])
+        except Exception as exc:  # noqa: BLE001 - no internet, login refused: the report still shows the rest
+            print(f"(Could not check {addr}: {type(exc).__name__}: {exc})")
+            ok = False
+            continue
+        for x in mine:
+            x.update(status.get(x["their_email"], {}))
+    return ok
 
 
 def cmd_report(a) -> int:
@@ -546,20 +583,36 @@ def cmd_report(a) -> int:
     for day, v in r["days"].items():
         print(line(row(day, v)))
     print(line(row("All days", r["total"])))
-    for kind in ("positive", "other") + (("negative",) if a.all else ()):
-        items = [x for x in r["replies"] if x["kind"] == kind]
-        print(f"\n{REPLY_KINDS[kind].capitalize()} replies ({len(items)}):" + ("" if items else " none yet"))
+    people = latest_replies(r["replies"])                 # one line per person: their last reply
+    checked = reply_status(people, offline=a.offline)
+    waiting = [x for x in people if not x.get("answered")]
+    done = len(people) - len(waiting)
+    print(f"\nReplies since day one: {len(people)} people - {done} answered by you, {len(waiting)} still waiting "
+          "for your answer" + ("" if checked else " (Gmail not checked: shown as not answered)") + ".")
+    for kind in ("positive", "other", "negative"):
+        items = [x for x in waiting if x["kind"] == kind]
+        print(f"\nNot answered yet - {REPLY_KINDS[kind]} ({len(items)}):" + ("" if items else " none"))
         for x in reversed(items):
-            print(f"  {x['date']}  {x['their_email']}  {x['business']} {x['lead_id']}".rstrip())
-            print(f"      to {x['our_account']}: \"{x['reply'][:160]}\"")
+            seen = {True: "opened", False: "NOT OPENED", None: ""}[x.get("seen")]
+            print(f"  {x['their_email']}   {x['business']} {x['lead_id']}".rstrip()
+                  + f"   {x['date']}, to {x['our_account']}" + (f", {seen}" if seen else ""))
+            print(f"      \"{x['reply'][:160]}\"")
+    if a.all and done:
+        print(f"\nAlready answered ({done}):")
+        for x in people:
+            if x.get("answered"):
+                print(f"  {x['their_email']}   {x['business']}   {REPLY_KINDS[x['kind']]}, {x['date']}")
     folders = download_folders()
     if folders and r["replies"]:
         out = folders[0] / "aurenflow-replies.csv"
         with out.open("w", newline="", encoding="utf-8") as fh:
-            w = csv.DictWriter(fh, ["date", "kind", "their_email", "business", "lead_id", "our_account", "reply"])
+            cols = ["date", "kind", "their_email", "business", "lead_id", "our_account", "answered", "opened", "reply"]
+            w = csv.DictWriter(fh, cols, extrasaction="ignore")
             w.writeheader()
-            for x in r["replies"]:
-                w.writerow({**x, "kind": REPLY_KINDS[x["kind"]]})
+            yes = {True: "yes", False: "no", None: "?"}
+            for x in people:
+                w.writerow({**x, "kind": REPLY_KINDS[x["kind"]], "answered": yes[x.get("answered")],
+                            "opened": yes[x.get("seen")]})
         print(f"\nAll replies are also in {out} (opens in Google Sheets; add your own notes there).")
     print("\nTo answer them: the India Replies tab in your Sheet has every reply with its next step; reply from the "
           "Gmail account shown after \"to\".")
@@ -702,7 +755,8 @@ def main(argv=None) -> int:
     sub.add_parser("check", help="test the keys in .env (Google Sheet and Gmail)")
     rp = sub.add_parser("report", help="e-mails sent per day, bounces, replies (interested / middle / no) and who replied")
     rp.add_argument("--days", type=int, default=14, help="how many days to show (default 14)")
-    rp.add_argument("--all", action="store_true", help="also list the 'not interested' replies")
+    rp.add_argument("--all", action="store_true", help="also list the replies you already answered")
+    rp.add_argument("--offline", action="store_true", help="don't look in Gmail (answered / opened unknown)")
     le = sub.add_parser("leads", help="find businesses in the next cities and look for their e-mail addresses")
     le.add_argument("--count", type=int, default=3, help="how many cities this time (default 3)")
     le.add_argument("--cities", default="", help="these cities instead, e.g. kolkata,mumbai")
