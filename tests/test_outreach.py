@@ -1030,3 +1030,40 @@ def test_waiting_whatsapp_rows_in_the_sheet_lose_the_old_price_line_once(tmp_pat
     assert "₹" not in unquote(rows[1][8]) and rows[1][8].startswith("https://wa.me/919830011111?text=")
     assert rows[2][7] == old                                               # one already sent: left as it was
     assert any("without the old price line" in n for n in s["notes"]) and store.get("wa_prices_dropped")
+
+
+def test_machine_replies_are_not_counted_as_people_but_a_polite_person_still_is():
+    from leadgen.outreach.classify import classify_reply, looks_automatic
+
+    machine = ["How was your experience? Your opinion matters. Rate us with one tap. https://api.flowcall.co/csat",
+               "Dear Valued Guest, Namaste! Thank you for writing to ITC Hotels Guest Contact Centre. We acknowledge the "
+               "receipt of your email. We are processing it and shall revert",
+               "Thank you for contacting us. Our customer care team will get back to you shortly.",
+               "Your ticket number 48213 has been created."]
+    for text in machine:
+        assert classify_reply("Re: quick idea", text) == "auto" and looks_automatic(text), text
+    people = {"Yes please send the preview": "positive", "What are your rates?": "positive",
+              "Thank you for your email, we are interested, please call me": "positive",
+              "Thank you for your email. Not interested.": "negative", "How much does it cost? Who are you?": "other",
+              "": "other"}
+    for text, kind in people.items():
+        assert classify_reply("Re: quick idea", text) == kind and not looks_automatic(text), text
+    assert classify_reply("Re: x", "Sure, call me", {"from": "Bot <noreply@cafe.in>"}) == "auto"
+    assert classify_reply("Re: x", "Sure, call me", {"x-freshdesk-ticket": "1"}) == "auto"
+    assert classify_reply("Re: x", "Sure, call me", {"from": "Ravi <ravi@cafe.in>"}) == "positive"
+
+
+def test_the_spam_test_sends_the_real_first_email_only_to_the_test_addresses_and_records_nothing(tmp_path):
+    sess, client = sheet_with(LEADS)
+    smtp, clock = SmtpWorld(), Clock(ts(2026, 11, 8, 11))
+    store = OutreachStore(str(tmp_path / "o.sqlite"))
+    pdf = tmp_path / "p.pdf"
+    pdf.write_bytes(b"%PDF-1.4 two pages")
+    code, s = runner(cfg_with(), store, client, clock, smtp, attach=str(pdf),
+                     test_to=["me@gmail.com", "check-123@srv1.mail-tester.com"]).run()
+    assert code == 0 and [m["To"] for m in smtp.sent] == ["me@gmail.com", "check-123@srv1.mail-tester.com"]
+    first = smtp.sent[0]
+    assert first["Subject"] and any(p.get_filename() for p in first.iter_attachments())     # the PDF too
+    assert store.scalar("SELECT COUNT(*) FROM sends", (), 0) == 0 and store.scalar("SELECT COUNT(*) FROM threads", (), 0) == 0
+    assert all(r["Status"] == "New" for r in tab(sess, "Leads") if r["Key"] in ("key1", "key2", "key3"))
+    assert sum("test e-mail to" in n for n in s["notes"]) == 2

@@ -40,6 +40,8 @@ def test_report_counts_each_day_and_lists_who_replied(tmp_path, monkeypatch, cap
                   (who, "k9", kind, ts(7, 15), "Yes please send the preview" if i == 1 else "How much does it cost?"))
         c.execute("INSERT INTO replies(email,lead_key,kind,received_at,snippet) VALUES(?,?,?,?,?)",
                   ("bot@x.in", "k8", "auto", ts(7, 16), "Out of office"))
+        c.execute("INSERT INTO replies(email,lead_key,kind,received_at,snippet) VALUES(?,?,?,?,?)",    # stored as
+                  ("care@x.in", "k7", "positive", ts(7, 17), "How was your experience? Rate us with one tap."))  # "yes"
     r = lr.report_data(14, datetime(2026, 11, 8, 12, tzinfo=IST))
     assert r["days"]["2026-11-06"] == {"first": 4, "followup": 0, "bounced": 2, "positive": 0, "other": 0, "negative": 0}
     assert r["days"]["2026-11-07"] == {"first": 0, "followup": 2, "bounced": 2, "positive": 1, "other": 1, "negative": 0}
@@ -57,7 +59,8 @@ def test_report_counts_each_day_and_lists_who_replied(tmp_path, monkeypatch, cap
     monkeypatch.setattr(inbox, "GmailInbox", Gmail)
     assert lr.cmd_report(type("A", (), {"days": 14, "all": False, "offline": False})()) == 0
     out = capsys.readouterr().out
-    assert "Replies since day one: 2 people - 1 answered by you, 1 still waiting for your answer." in out
+    assert ("Replies from real people since day one: 2 - 1 answered by you, 1 still waiting for your answer. "
+            "Left out: 2 automatic replies (receipts, tickets, surveys).") in out
     assert "Not answered yet - interested (0): none" in out
     assert "Not answered yet - in the middle (1):" in out and "hi@brew.in" in out and "to two@gmail.com, opened" in out
     assert "How much does it cost?" in out and "owner@leafcafe.in" not in out and "Out of office" not in out

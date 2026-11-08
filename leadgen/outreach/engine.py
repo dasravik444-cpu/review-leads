@@ -6,6 +6,7 @@ gaps, every reply/bounce/opt-out stops the conversation, and sending pauses by i
 a limit or too many addresses bounce."""
 from __future__ import annotations
 
+import copy
 import math
 import os
 import random
@@ -67,7 +68,7 @@ class Outreach:
     def __init__(self, cfg, store, *, client=None, sender=None, inbox=None, live: bool | None = None,
                  max_emails: int | None = None, now_fn=time.time, sleep_fn=time.sleep, rng=None, use_sheet: bool = True,
                  attach: str | None = None, bcc: str = "", lane: tuple[int, int] | None = None, whatsapp: bool = True,
-                 tab_suffix: str = "", also_stores: list[str] | tuple = ()):
+                 tab_suffix: str = "", also_stores: list[str] | tuple = (), test_to: list[str] | tuple = ()):
         self.cfg, self.store = cfg, store
         self.o = cfg["outreach"]
         # Several Gmail accounts (scripts/local_run.py): each one is a "lane" with its own memory (store) and its own
@@ -94,6 +95,7 @@ class Outreach:
         self.now, self.sleep = now_fn, sleep_fn
         self.rng = rng or random.Random()
         self.max_emails = max_emails
+        self.test_to = [a.strip() for a in test_to if a and "@" in a]   # the spam test: only these get it
         self.bcc = bcc                  # a blind copy of each first e-mail (the owner checking what leads receive)
         # A PDF for the first e-mail (e.g. marketing/pitch.pdf): the --attach option, else [outreach.email] attachment.
         path = attach if attach is not None else str(self.o["email"].get("attachment") or "")
@@ -201,6 +203,9 @@ class Outreach:
                 self.notes.append(f"Google Sheet error: {exc}")
                 return 2, self._summary("sheet error")
         self.by_key = {lead.key: lead for lead in self.leads}
+        if self.test_to:
+            self._send_test()
+            return self.code, self._summary("test")
         self._check_inbox()
         self._mark_no_reply()
         self._send_emails()
@@ -477,6 +482,34 @@ class Outreach:
             n = min(self.max_emails, remaining)
         batch = self._pick(n)
         self._send_batch(batch)
+
+    def _send_test(self) -> None:
+        """The spam test: the first e-mail the next business would get (same subject, words and PDF), sent only to
+        the owner's test addresses. No business is e-mailed and nothing is recorded."""
+        if not self.live or self.sender is None:
+            self.notes.append("test: needs the live mode and the Gmail login")
+            self.code = max(self.code, 2)
+            return
+        item = next((x for x in self._pick(5) if x["kind"] == "new"), None)
+        if item is None:
+            self.notes.append("test: no business left to take the e-mail's words from")
+            self.code = max(self.code, 2)
+            return
+        msg = self._compose(item)
+        if "Bcc" in msg:
+            del msg["Bcc"]
+        try:
+            for addr in self.test_to:
+                one = copy.deepcopy(msg)
+                del one["To"]
+                one["To"] = addr
+                res = self.sender.send(one)
+                self.notes.append(f"test e-mail to {addr}: {res.status}" + (f" ({res.detail[:120]})" if not res.ok else "")
+                                  + f" - subject \"{msg['Subject']}\", written for {item['lead'].business}")
+                if not res.ok:
+                    self.code = max(self.code, 2)
+        finally:
+            self.sender.close()
 
     def _dry_run_login_check(self) -> None:
         if self.sender is None:

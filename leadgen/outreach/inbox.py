@@ -186,5 +186,6 @@ class GmailInbox:
             if not hits and thread_email:
                 hits = {thread_email}
             return [InboxEvent("bounce", e, uid=uid) for e in sorted(hits)]
-        kind = classify_reply(subject, body, h)
+        # every header of the message (helpdesk systems mark theirs), not only the few read to find it
+        kind = classify_reply(subject, body, {**{k.lower(): str(v) for k, v in msg.items()}, **h})
         return [InboxEvent("reply", thread_email, kind, new_text(body), uid)]

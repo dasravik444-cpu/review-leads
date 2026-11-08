@@ -409,6 +409,27 @@ def resume_sending(now: float | None = None) -> list[str]:
     return out
 
 
+def email_test(a) -> int:
+    """emails --test-to ADDRESS ...: the next first e-mail, exactly as a business would get it (words, subject, PDF),
+    from each Gmail account to your own test addresses only; then you look where it landed."""
+    accounts = gmail_accounts() or [(os.environ.get("OUTREACH_GMAIL_ADDRESS", ""), "")]
+    n, only = len(accounts), getattr(a, "account", 0) or 0
+    lanes = []
+    for i, (addr, pw) in enumerate(accounts, start=1):
+        if only and i != only:
+            continue
+        args = ["outreach", "--config", conf("outreach"), "--db", str(account_db(i)), "--mode", "live",
+                *account_args(i, n), "--test-to", *a.test_to]
+        if not a.no_pdf:
+            args += ["--attach", str(attachment())]
+        env = {"OUTREACH_GMAIL_ADDRESS": addr, "OUTREACH_GMAIL_APP_PASSWORD": pw} if pw else {}
+        lanes.append((i, addr, args, env))
+    code = run_accounts(lanes)
+    print("\nNow open each test mailbox (in the Gmail app: Primary, Promotions, Updates AND Spam) and note where the "
+          "e-mail from each of your accounts landed. Send me a screenshot.")
+    return code
+
+
 def cmd_emails(a) -> int:
     m = market()
     if getattr(a, "resume", False):
@@ -417,6 +438,8 @@ def cmd_emails(a) -> int:
         if lines:
             print("The robot sends again at its next hourly e-mail time (robot status shows it).")
         return 0
+    if getattr(a, "test_to", None):
+        return email_test(a)
     ok, when = email_time()
     if not ok and not a.now and not a.check:
         print(f"It is {when}: outside office hours in {m.name}.\n"
@@ -491,8 +514,11 @@ def report_data(days: int = 14, now: datetime | None = None) -> dict:
     tz = market().tz
     now = now or datetime.now(tz)
     addrs = [a for a, _ in gmail_accounts()] or [os.environ.get("OUTREACH_GMAIL_ADDRESS", "")]
+    from leadgen.outreach.classify import looks_automatic
+
     per_day: dict[str, dict] = {}
     replies: list[dict] = []
+    automatic = 0
     blank = lambda: {"first": 0, "followup": 0, "bounced": 0, "positive": 0, "other": 0, "negative": 0}  # noqa: E731
     for i in range(1, 4):
         db = account_db(i)
@@ -512,6 +538,9 @@ def report_data(days: int = 14, now: datetime | None = None) -> dict:
                                                           "replies ORDER BY received_at"):
                 if kind not in REPLY_KINDS:
                     continue
+                if looks_automatic(str(text or "")):      # a receipt, ticket or survey stored as a reply before
+                    automatic += 1                       # 8 November 2026: not a person, left out
+                    continue
                 day = datetime.fromtimestamp(at, tz).date().isoformat()
                 per_day.setdefault(day, blank())[kind] += 1
                 business, lead_id = names.get(email, ("", ""))
@@ -529,7 +558,7 @@ def report_data(days: int = 14, now: datetime | None = None) -> dict:
     for v in per_day.values():
         for k in total:
             total[k] += v[k]
-    return {"days": shown, "total": total, "replies": replies}
+    return {"days": shown, "total": total, "replies": replies, "automatic": automatic}
 
 
 def latest_replies(replies: list[dict]) -> list[dict]:
@@ -587,8 +616,9 @@ def cmd_report(a) -> int:
     checked = reply_status(people, offline=a.offline)
     waiting = [x for x in people if not x.get("answered")]
     done = len(people) - len(waiting)
-    print(f"\nReplies since day one: {len(people)} people - {done} answered by you, {len(waiting)} still waiting "
-          "for your answer" + ("" if checked else " (Gmail not checked: shown as not answered)") + ".")
+    print(f"\nReplies from real people since day one: {len(people)} - {done} answered by you, {len(waiting)} still "
+          "waiting for your answer" + ("" if checked else " (Gmail not checked: shown as not answered)") + "."
+          + (f" Left out: {r['automatic']} automatic replies (receipts, tickets, surveys)." if r["automatic"] else ""))
     for kind in ("positive", "other", "negative"):
         items = [x for x in waiting if x["kind"] == kind]
         print(f"\nNot answered yet - {REPLY_KINDS[kind]} ({len(items)}):" + ("" if items else " none"))
@@ -596,7 +626,8 @@ def cmd_report(a) -> int:
             seen = {True: "opened", False: "NOT OPENED", None: ""}[x.get("seen")]
             print(f"  {x['their_email']}   {x['business']} {x['lead_id']}".rstrip()
                   + f"   {x['date']}, to {x['our_account']}" + (f", {seen}" if seen else ""))
-            print(f"      \"{x['reply'][:160]}\"")
+            print(f"      \"{x['reply'][:160]}\"" if x["reply"] else
+                  "      (no text: maybe a picture or an attachment - open it in Gmail)")
     if a.all and done:
         print(f"\nAlready answered ({done}):")
         for x in people:
@@ -774,6 +805,8 @@ def main(argv=None) -> int:
     em.add_argument("--check", action="store_true", help="only read replies and bounces, send nothing (any time)")
     em.add_argument("--account", type=int, default=0, help="only this Gmail account (1, 2 or 3; default: all)")
     em.add_argument("--resume", action="store_true", help="end a sending pause now (e.g. the bounce brake's)")
+    em.add_argument("--test-to", nargs="+", default=[], metavar="ADDRESS",
+                    help="spam test: the next first e-mail, exactly as a business gets it, only to these addresses")
     wa = sub.add_parser("whatsapp", help="the WhatsApp Queue: what to send, the next message, a result (sends nothing)")
     wa_sub = wa.add_subparsers(dest="action", required=True)
     wl = wa_sub.add_parser("list", help="the messages waiting")
@@ -807,7 +840,7 @@ def main(argv=None) -> int:
             return 2
     run = {"check": cmd_check, "leads": cmd_leads, "hunt": cmd_hunt, "emails": cmd_emails, "import": cmd_import,
            "whatsapp": cmd_whatsapp}[a.cmd]
-    if a.cmd in ("check", "whatsapp") or getattr(a, "resume", False):   # single cells / one setting: no need to wait
+    if a.cmd in ("check", "whatsapp") or getattr(a, "resume", False) or getattr(a, "test_to", None):   # single cells / one setting: no need to wait
         return run(a)
     if a.cmd == "import":              # takes the lock itself, for the Sheet part only, and waits for it
         try:

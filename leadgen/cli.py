@@ -93,6 +93,9 @@ def build_parser() -> argparse.ArgumentParser:
     o.add_argument("--max-emails", type=int, default=None, help="send at most this many e-mails in this run (testing)")
     o.add_argument("--attach", default=None, help="attach this PDF to first e-mails (default: [outreach.email] attachment)")
     o.add_argument("--bcc", default="", help="a blind copy of each first e-mail to this address (to see what leads get)")
+    o.add_argument("--test-to", nargs="+", default=[], metavar="ADDRESS",
+                   help="send the next first e-mail (text and PDF exactly as a business gets it) only to these "
+                        "addresses, to see where it lands (inbox, spam); no business is e-mailed, nothing is recorded")
     o.add_argument("--lane", default="", help="I/N: this Gmail account is account I of N (its share of the businesses)")
     o.add_argument("--no-whatsapp", action="store_true", help="leave the WhatsApp queue and letters to another account")
     o.add_argument("--tab-suffix", default="", help="this account's own Outreach and Email Preview tabs (e.g. ' 2')")
@@ -232,7 +235,7 @@ def cmd_outreach(cfg, args) -> int:
     try:
         live = None if args.mode is None else args.mode == "live"
         lane = tuple(int(x) for x in args.lane.split("/")) if args.lane else None
-        engine = Outreach(cfg, store, live=live, max_emails=args.max_emails, attach=args.attach, bcc=args.bcc,
+        engine = Outreach(cfg, store, live=live, max_emails=args.max_emails, attach=args.attach, bcc=args.bcc, test_to=args.test_to,
                           lane=lane, whatsapp=not args.no_whatsapp, tab_suffix=args.tab_suffix, also_stores=args.also_db)
         code, summary = engine.run()
     finally:

@@ -15,13 +15,44 @@ NEGATIVE = re.compile(
 NEGATIVE_SHORT = re.compile(r"^\s*(no|nope|na|nah|nahi|nahin|stop|not now|nein|nee|ne|delete|remove)[\s.!]*$", re.I)
 POSITIVE = re.compile(
     r"\b(yes|yeah|yep|sure|ok(ay)?|interested|please\s+(send|share|call)|send\s+(it|me|us|the|your)|share\s+(it|the|your)"
-    r"|price\s*list|prices?|rates?|quote|quotation|catalogu?e|brochure|call\s+(me|us)|whats\s*app|details|let'?s\s+talk"
+    r"|price\s*list|prices?|(?:your|the)\s+rates?|quote|quotation|catalogu?e|brochure|call\s+(me|us)|whats\s*app|details|let'?s\s+talk"
     r"|haan|ha\s+ji|haanji|ji\s+haan|bhejo|bhejiye|pathan|pathiye"
     r"|preview|demo|ja|gerne?|interessiert|bitte\s+(?:schicken|senden|zusenden|melden)|schicken\s+sie|rufen\s+sie|"
     r"vorschau|angebot|preis\w*|termin)\b", re.I)
 AUTO_SUBJECT = re.compile(r"(out\s+of\s+(the\s+)?office|automatic\s+reply|auto-?reply|autoreply|away\s+from|on\s+leave|vacation"
                           r"|abwesenheit|automatische\s+antwort|nicht\s+im\s+b(?:ü|ue)ro|urlaub|eingangsbest(?:ä|ae)tigung"
                           r"|thank\s+you\s+for\s+(your\s+)?(e-?mail|message|contacting)|we\s+have\s+received\s+your)", re.I)
+# A machine answering, read in the message itself (8 November 2026: a "rate us" survey counted as interested and a
+# hotel's "we acknowledge the receipt of your email" as a reply): receipts, tickets, surveys, do-not-reply notes.
+AUTO_TEXT = re.compile(           # strong: only machines write this
+    r"(acknowledge\s+(the\s+)?receipt|(this|it)\s+is\s+an?\s+(auto(matic|mated)?|system)[\s-]+(generated\s+)?"
+    r"(reply|response|e-?mail|message)|(please\s+)?do\s+not\s+reply|no-?reply|rate\s+us|how\s+(was|would\s+you\s+rate)"
+    r"\s+your\s+(experience|interaction)|your\s+opinion\s+matters|(customer|guest)\s+(satisfaction|feedback)\s+survey|csat"
+    r"|(ticket|case|complaint|reference)\s*(id|no\.?|number|#)\s*[:#]?\s*\w*\d|your\s+(ticket|case|request|query)\s+"
+    r"(has\s+been|is\s+being|was)\s+(created|registered|logged|received|raised)|out\s+of\s+(the\s+)?office"
+    r"|on\s+leave\s+(till|until|from))", re.I)
+AUTO_WEAK = re.compile(           # weak: a machine's usual words, but a polite person may write them too
+    r"(thank\s+you\s+for\s+(writing|contacting|reaching\s+out|getting\s+in\s+touch|your\s+(e-?mail|mail|message|enquiry|"
+    r"inquiry|query|request))|we\s+(have\s+)?received\s+your|(shall|will)\s+(get\s+back|revert|respond)\s+(to\s+you\s+)?"
+    r"(shortly|soon|at\s+the\s+earliest|within)|(customer|guest)\s+(care|support|service|contact)\s+(team|cent(re|er)|desk))",
+    re.I)
+INTEREST = re.compile(r"\b(interested|yes|sure|please\s+(send|share|call)|call\s+(me|us)|send\s+(it|me|us|the)|"
+                      r"preview|demo|how\s+much|price|cost|rates?)\b", re.I)
+AUTO_SENDER = re.compile(r"^(no-?reply|do-?not-?reply|donotreply|notifications?|alerts?|mailer|bounces?|support-?ticket)[^@]*@", re.I)
+# Helpdesk and marketing systems mark their mail with their own headers.
+AUTO_HEADER = re.compile(r"^(x-freshdesk|x-zendesk|x-helpscout|x-kayako|x-zoho-?desk|x-hubspot|x-mc-user|x-sfmc|list-unsubscribe|list-id)",
+                         re.I)
+
+
+def looks_automatic(text: str) -> bool:
+    """A reply whose own words read like a machine's (receipt, ticket, survey); also usable on stored replies. A
+    polite person's "thank you for your e-mail" with a yes, a no or a question in it stays a person's reply."""
+    t = (text or "")[:1500]
+    if AUTO_TEXT.search(t):
+        return True
+    return bool(AUTO_WEAK.search(t)) and not INTEREST.search(t) and not NEGATIVE.search(t)
+
+
 BOUNCE_FROM = re.compile(r"(mailer-daemon|postmaster|mail\s+delivery\s+(subsystem|system)|delivery\s+status)", re.I)
 BOUNCE_SUBJECT = re.compile(r"(delivery\s+status\s+notification|undeliver|delivery\s+(has\s+)?failed|mail\s+delivery\s+failed"
                             r"|returned\s+mail|failure\s+notice|address\s+not\s+found|message\s+not\s+delivered|could\s+not\s+be\s+delivered)", re.I)
@@ -47,6 +78,12 @@ def is_auto_reply(headers: dict, subject: str) -> bool:
         return True
     if headers.get("x-autoreply") or headers.get("x-autorespond") or (headers.get("precedence") or "").lower() in ("auto_reply", "bulk", "junk"):
         return True
+    if any(AUTO_HEADER.match(k) for k in headers):
+        return True
+    from email.utils import parseaddr
+
+    if AUTO_SENDER.match(parseaddr(headers.get("from") or "")[1] or ""):
+        return True
     return bool(AUTO_SUBJECT.search(subject or ""))
 
 
@@ -56,8 +93,12 @@ def classify_reply(subject: str, body: str, headers: dict | None = None) -> str:
     if is_auto_reply(headers, subject):
         return "auto"
     text = new_text(body)
+    if AUTO_TEXT.search(text[:1500]):
+        return "auto"
     if re.search(r"\bunsubscribe\b", subject or "", re.I) or NEGATIVE.search(text) or NEGATIVE_SHORT.match(text.split("\n")[0] if text else ""):
         return "negative"
+    if looks_automatic(text):
+        return "auto"
     if POSITIVE.search(text):
         return "positive"
     return "other"
