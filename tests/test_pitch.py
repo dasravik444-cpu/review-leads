@@ -85,3 +85,30 @@ def test_the_india_version_has_no_prices_and_has_the_monthly_review_report():
     us = p.build_html(d).split("</style>", 1)[1]
     assert "We track your Google reviews, every month" not in us and "Reply “yes” to our e-mail" in us
     assert (ROOT / "marketing" / "pitch-in.pdf").is_file()       # the one e-mails attach until you import your copy
+
+
+def brochure():
+    spec = importlib.util.spec_from_file_location("build_brochure", ROOT / "marketing" / "build_brochure.py")
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["build_brochure"] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_the_india_brochure_shows_every_service_as_a_picture_without_prices_and_no_number_in_the_public_copy():
+    b = brochure()
+    d = json.loads((ROOT / "marketing" / "brochure-in.json").read_text(encoding="utf-8"))
+    html = b.build_html({**d, "phone": "", "email": ""})
+    words = visible(html).lower()
+    for price in PRICE_WORDS:
+        assert not has_word(words, price), price
+    for s in d["services"] + d["steps"]:
+        assert s["art"] in b.ART, s["art"]                                  # a drawing for every service and step
+    for text in ("Your review QR code", "Pay & review in one scan", "Review requests on WhatsApp", "Monthly review report"):
+        assert html.replace("&amp;", "&").count(text) == 1, text
+    assert "Scan to WhatsApp" not in html and "wa.me" not in html            # the public copy: no number, no chat code
+    mine = b.build_html({**d, "phone": "+91 90000 00000", "email": ""})
+    assert "+91 90000 00000" in mine and "Scan to WhatsApp" in mine
+    assert f"edition {d['edition']}" in html.split("<title>")[1].split("</title>")[0]
+    pdf = (ROOT / "marketing" / "pitch-in.pdf").read_bytes()                 # the e-mails' PDF is this edition
+    assert f"edition {d['edition']}".encode() in pdf and b"90000" not in pdf

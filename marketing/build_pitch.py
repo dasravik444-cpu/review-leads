@@ -1,8 +1,8 @@
 """The sales PDF for businesses: two pages, US Letter.
 
     python marketing/build_pitch.py                      # -> marketing/pitch.pdf (details from marketing/pitch.json)
-    python marketing/build_pitch.py --market in          # -> marketing/pitch-in.pdf: the India version (with the
-                                                         #    monthly review report; "markets" in pitch.json)
+    python marketing/build_pitch.py --market in          # the older India version; since 18 November 2026 the
+                                                         #    India PDF (pitch-in.pdf) comes from build_brochure.py
     python marketing/build_pitch.py --png                # also page images, to check the layout
     python marketing/build_pitch.py --phone "+1 ..."     # override a detail for one build
     python marketing/build_pitch.py --brand-files        # also the logo as pictures (marketing/brand/)

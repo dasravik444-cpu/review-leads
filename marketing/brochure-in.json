@@ -1,0 +1,127 @@
+{
+  "_comment": "The India brochure (marketing/pitch-in.pdf), in the Aurenflow navy-and-gold style of the clinic and international brochures. Change the words here, then: python marketing/build_brochure.py. No prices (15 October 2026). Your phone is NOT kept here (this repository is public): it goes only into your own copy, built with --phone.",
+  "brand": "Aurenflow",
+  "tagline": "Google reviews for cafés, restaurants, salons & gyms",
+  "edition": "IN-2026-11-18",
+  "headline": "More Google reviews. More customers walking in.",
+  "subline": "One scan opens your Google review page. We make it easy for every happy customer to review you, track your reviews every month and help you show up higher on Google Maps.",
+  "services": [
+    {
+      "art": "qr",
+      "title": "Your review QR code",
+      "text": "On tables, the counter and bills: one scan opens your Google review page."
+    },
+    {
+      "art": "payreview",
+      "title": "Pay & review in one scan",
+      "text": "One QR: customers pay by UPI and leave a review, all in one place."
+    },
+    {
+      "art": "print",
+      "title": "Print-ready designs",
+      "text": "Table tents, counter cards and window stickers with your name."
+    },
+    {
+      "art": "whatsapp",
+      "title": "Review requests on WhatsApp",
+      "text": "Your customer list gets a friendly thank-you with your review link."
+    },
+    {
+      "art": "report",
+      "title": "Monthly review report",
+      "text": "New reviews and your star rating, month by month."
+    },
+    {
+      "art": "insights",
+      "title": "What Google brings you",
+      "text": "Calls, directions and website visits from your Google profile."
+    },
+    {
+      "art": "preview",
+      "wide": true,
+      "title": "See it with your name on it, free.",
+      "text": "Reply “yes” and we send you a free preview: your own QR design with your business's name, ready to print. No cost, no obligation."
+    }
+  ],
+  "facts": [
+    {
+      "big": "5–9%",
+      "text": "more revenue per extra star for independent restaurants",
+      "cite": "Harvard Business School, M. Luca (2011)"
+    },
+    {
+      "big": "31%",
+      "text": "of people only use businesses rated 4.5 stars or more",
+      "cite": "BrightLocal Local Consumer Review Survey 2026"
+    },
+    {
+      "big": "No. 1",
+      "text": "Google is the review site people use most to choose",
+      "cite": "BrightLocal Local Consumer Review Survey 2026"
+    }
+  ],
+  "steps": [
+    {
+      "art": "scan",
+      "title": "Customers scan",
+      "text": "At the table, the counter or on the bill. No app."
+    },
+    {
+      "art": "reviews",
+      "title": "They review",
+      "text": "Stars and a line on Google, in seconds. Never needed to pay."
+    },
+    {
+      "art": "remind",
+      "title": "We follow up",
+      "text": "Customers who agreed get up to 3 friendly WhatsApp reminders."
+    },
+    {
+      "art": "growth",
+      "title": "You see results",
+      "text": "More reviews, a better rating, a clear monthly report."
+    }
+  ],
+  "industries": [
+    {
+      "icon": "cup",
+      "label": "Cafés"
+    },
+    {
+      "icon": "dish",
+      "label": "Restaurants"
+    },
+    {
+      "icon": "glass",
+      "label": "Bars & pubs"
+    },
+    {
+      "icon": "cake",
+      "label": "Bakeries & sweets"
+    },
+    {
+      "icon": "scissors",
+      "label": "Salons & spas"
+    },
+    {
+      "icon": "gym",
+      "label": "Gyms & studios"
+    },
+    {
+      "icon": "bed",
+      "label": "Hotels & stays"
+    },
+    {
+      "icon": "bag",
+      "label": "Shops & boutiques"
+    }
+  ],
+  "promises": [
+    "Within Google's rules: everyone is asked the same way, no rewards",
+    "Your customer list stays yours, always",
+    "Nothing to install: customers only need their phone camera"
+  ],
+  "cta_title": "Get your free preview.",
+  "cta_text": "Reply “yes” to our message or scan the code: we send your free preview, ready to print. No cost, no obligation.",
+  "contact_fallback": "Simply reply to our message"
+}
