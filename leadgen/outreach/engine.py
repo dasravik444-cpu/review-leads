@@ -97,11 +97,15 @@ class Outreach:
         self.max_emails = max_emails
         self.test_to = [a.strip() for a in test_to if a and "@" in a]   # the spam test: only these get it
         self.bcc = bcc                  # a blind copy of each first e-mail (the owner checking what leads receive)
-        # A PDF for the first e-mail (e.g. marketing/pitch.pdf): the --attach option, else [outreach.email] attachment.
-        path = attach if attach is not None else str(self.o["email"].get("attachment") or "")
+        # The PDFs for the first e-mail (e.g. marketing/pitch.pdf): the --attach option (once or more), else
+        # [outreach.email] attachment. The first is named after the brand ("Aurenflow-overview.pdf"), the others keep
+        # their own file names ("Aurenflow-customer-growth.pdf").
+        paths = attach if attach is not None else str(self.o["email"].get("attachment") or "")
+        paths = [p for p in ([paths] if isinstance(paths, str) else list(paths)) if p]
         brand = re.sub(r"[^A-Za-z0-9]+", "-", str(self.o["sender"].get("business") or "")).strip("-")
-        self.attachment = ((f"{brand}-overview.pdf" if brand else os.path.basename(path)), Path(path).read_bytes()) \
-            if path else None
+        self.attachments = [((f"{brand}-overview.pdf" if brand and i == 0 else os.path.basename(p)), Path(p).read_bytes())
+                            for i, p in enumerate(paths)]
+        self.attachment = self.attachments[0] if self.attachments else None
         if live is None:
             live = self.o["mode"] == "live" or os.environ.get("OUTREACH_LIVE", "").strip().lower() in ("1", "true", "yes")
         self.live = live
@@ -653,12 +657,12 @@ class Outreach:
         tx = T.texts(self.lang)
         addr = self.sender.address if self.sender else "you@example.com"
         if item["kind"] == "new":
-            if self.attachment:
-                ctx["attachment_note"] = tx.get("attachment_note", "")
+            if self.attachments:
+                ctx["attachment_note"] = tx.get("attachment_note_two" if len(self.attachments) > 1 else "attachment_note", "")
             subject = self.rules.subject_prefix + T.render(T.pick(e.get("subjects") or tx["subjects"], lead.key), ctx)
             body = T.render(e.get("first") or tx["first"], ctx)
             msg = build_message(sender_name=s.get("name", ""), sender_addr=addr, to=item["email"], subject=subject, body=body,
-                                attachments=[self.attachment] if self.attachment else None)
+                                attachments=self.attachments or None)
             if self.bcc:
                 msg["Bcc"] = self.bcc   # smtplib sends it to this address too and removes the header
             return msg

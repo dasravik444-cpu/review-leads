@@ -152,6 +152,34 @@ window_start = "00:00"
 window_end = "23:59"
 days = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 follow_up_days = [3, 7]
+# The words (19 November 2026): Aurenflow International's e-mail (worldreach), per kind of business, with both
+# brochures attached ({attachment_note}); the India footer below. {pain} {what} {math} {topic} {cta} {cta2} and
+# {group_subject} come from leadgen/outreach/templates.py (GROWTH), a variant per business.
+subjects = ["{group_subject}"]
+first = """{greeting}
+
+{intro}
+
+{pain} {what}
+
+{attachment_note} {cta}
+
+{sender_first}
+{footer}"""
+follow_ups = ["""{greeting}
+
+A short follow-up on my note about {topic}. In plain numbers: {math}. We write the messages, you approve every word before anything goes out, and you see each answer.
+
+{cta2}
+
+{sender_first}
+{footer}""", """{greeting}
+
+Last note from me. If {topic} is not a priority for {business} right now, no problem at all, and I won't write again. If it is, reply "yes" and I'll send you a free preview.
+
+All the best,
+{sender_first}
+{footer}"""]
 footer = """{sender_business}
 WhatsApp: {sender_phone}
 

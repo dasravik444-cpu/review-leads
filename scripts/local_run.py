@@ -325,6 +325,14 @@ def attachment() -> Path:
     return own if own.is_file() else public
 
 
+def attachments() -> list[Path]:
+    """The PDFs on every first e-mail: the India brochure (attachment(), your own copy once imported) and the
+    international one (Aurenflow International's customer-growth brochure, 19 November 2026). WhatsApp chats get
+    the first one only."""
+    extra = ROOT / "marketing" / "Aurenflow-customer-growth.pdf"
+    return [attachment()] + ([extra] if extra.is_file() and market().code == "in" else [])
+
+
 def gmail_accounts() -> list[tuple[str, str]]:
     """The Gmail accounts that send: OUTREACH_GMAIL_ADDRESS / OUTREACH_GMAIL_APP_PASSWORD in settings.txt, then the
     same with _2 and _3 at the end for more accounts (each one sends its own share; docs/LOCAL.md)."""
@@ -421,7 +429,7 @@ def email_test(a) -> int:
         args = ["outreach", "--config", conf("outreach"), "--db", str(account_db(i)), "--mode", "live",
                 *account_args(i, n), "--test-to", *a.test_to]
         if not a.no_pdf:
-            args += ["--attach", str(attachment())]
+            args += [x for pdf in attachments() for x in ("--attach", str(pdf))]
         env = {"OUTREACH_GMAIL_ADDRESS": addr, "OUTREACH_GMAIL_APP_PASSWORD": pw} if pw else {}
         lanes.append((i, addr, args, env))
     code = run_accounts(lanes)
@@ -464,7 +472,7 @@ def cmd_emails(a) -> int:
         elif a.max is not None:
             args += ["--max-emails", str(a.max)]
         if not a.no_pdf:
-            args += ["--attach", str(attachment())]
+            args += [x for pdf in attachments() for x in ("--attach", str(pdf))]
         if a.copy_to:
             args += ["--bcc", a.copy_to]
         sent = DATA / ("last-sent.csv" if i == 1 else f"last-sent-{i}.csv")

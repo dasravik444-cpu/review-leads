@@ -1067,3 +1067,32 @@ def test_the_spam_test_sends_the_real_first_email_only_to_the_test_addresses_and
     assert store.scalar("SELECT COUNT(*) FROM sends", (), 0) == 0 and store.scalar("SELECT COUNT(*) FROM threads", (), 0) == 0
     assert all(r["Status"] == "New" for r in tab(sess, "Leads") if r["Key"] in ("key1", "key2", "key3"))
     assert sum("test e-mail to" in n for n in s["notes"]) == 2
+
+
+def test_india_first_email_has_the_international_wording_per_kind_of_business_and_both_brochures(tmp_path):
+    from leadgen.config import load_config
+    from leadgen.outreach.mailer import body_text
+
+    cfg = load_config("config/in/outreach.toml")
+    cfg["sheets"]["leads_tab"] = "Leads"
+    cfg["outreach"]["sender"].update(name="Ravik", phone="+91 90000 00000")      # a dummy number
+    leads = [lead(1, "Bounce Salon", email="hi@bounce.in", category="Hair / Beauty / Barber", priority="High"),
+             lead(2, "Cult Gym", email="hi@cultgym.in", category="Gym / Fitness studio", priority="High"),
+             lead(3, "Leaf Cafe", email="hi@leafcafe.in", category="Cafe", priority="High")]
+    sess, client = sheet_with(leads)
+    india = tmp_path / "pitch-in.pdf"
+    india.write_bytes(b"%PDF-1.4 india")
+    intl = tmp_path / "Aurenflow-customer-growth.pdf"
+    intl.write_bytes(b"%PDF-1.4 intl")
+    smtp = SmtpWorld()
+    runner(cfg, OutreachStore(str(tmp_path / "o.sqlite")), client, Clock(ts(2026, 11, 19, 11)), smtp, max_emails=3,
+           attach=[str(india), str(intl)]).run()
+    by = {m["To"]: m for m in smtp.sent}
+    assert [p.get_filename() for p in by["hi@bounce.in"].iter_attachments()] == [
+        "Aurenflow-overview.pdf", "Aurenflow-customer-growth.pdf"]
+    salon, gym, cafe = (body_text(by[a]) for a in ("hi@bounce.in", "hi@cultgym.in", "hi@leafcafe.in"))
+    assert "overdue" in salon + by["hi@bounce.in"]["Subject"] or "empty chairs" in by["hi@bounce.in"]["Subject"]
+    assert "members" in gym and "guests" in cafe                         # each kind of business its own words
+    for text in (salon, gym, cafe):
+        assert "I've attached two short overviews (PDF)" in text and '"yes"' in text
+        assert "{" not in text and "₹" not in text and "Not interested? Reply \"no\"" in text

@@ -150,7 +150,7 @@ after it, `robot off` and `robot on` once start the new version of the switch to
 own copy is attached only when it is the same edition as the newest PDF in the code, so an outdated copy is never
 sent (the newest from the code goes out instead, until you import your copy of it). Every first e-mail carries the 2-page Aurenflow PDF (named
 `Aurenflow-overview.pdf` in the e-mail): India gets the India version (`marketing/pitch-in.pdf`, with the monthly review report), the US its own
-one. Neither shows a price (since 15 October 2026): only the product. Save your own copy, the one with your WhatsApp number (`Aurenflow-India-overview.pdf` for India,
+one. Neither shows a price (since 15 October 2026): only the product. Since 19 November 2026 India's first e-mails carry **two** PDFs: this one and Aurenflow International's customer-growth brochure (`marketing/Aurenflow-customer-growth.pdf`), with the international e-mail wording per kind of business; WhatsApp chats send only the first. Save your own copy, the one with your WhatsApp number (`Aurenflow-India-overview.pdf` for India,
 `Aurenflow-overview.pdf` for the US), into the tablet's Download folder, then type `import`: from then on that one
 is attached. `import` also adds lead lists you downloaded from GitHub (`leads-<city>.zip`) to the Sheet:
 today's rules are applied again (big chains and addresses that are not the business's are left out), businesses

@@ -91,7 +91,8 @@ def build_parser() -> argparse.ArgumentParser:
     o.add_argument("--db", default=DEFAULT_OUTREACH_DB, help=f"outreach state database (default {DEFAULT_OUTREACH_DB})")
     o.add_argument("--mode", choices=["dry-run", "live"], default=None, help="override [outreach].mode")
     o.add_argument("--max-emails", type=int, default=None, help="send at most this many e-mails in this run (testing)")
-    o.add_argument("--attach", default=None, help="attach this PDF to first e-mails (default: [outreach.email] attachment)")
+    o.add_argument("--attach", action="append", default=None,
+                   help="attach this PDF to first e-mails (repeat for more; default: [outreach.email] attachment)")
     o.add_argument("--bcc", default="", help="a blind copy of each first e-mail to this address (to see what leads get)")
     o.add_argument("--test-to", nargs="+", default=[], metavar="ADDRESS",
                    help="send the next first e-mail (text and PDF exactly as a business gets it) only to these "

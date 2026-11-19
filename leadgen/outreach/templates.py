@@ -68,6 +68,8 @@ Not interested? Just reply "no" and we won't write again.""",
     "source_line": "We found this address on your website or public listing; reply \"delete\" and we erase it.",
     "offer": "We also track your new Google reviews every month.",
     "attachment_note": "I've attached a two-page overview (PDF) with pictures of how it works.",
+    "attachment_note_two": ("I've attached two short overviews (PDF): how we grow your Google reviews, and how we "
+                            "bring past customers back."),
     "intro_usp": 'I came across {business} and liked this line on your website: "{usp}".',
     "intro_plain": "I came across {business} while looking at {audience} in {place}.",
     "greeting_named": "Hi {first_name},",
@@ -206,9 +208,147 @@ AUDIENCE_DE = {
 
 LANGS = {"en": (EN, HOOKS_EN, AUDIENCE_EN), "de": (DE, HOOKS_DE, AUDIENCE_DE)}
 
+# ------------------------------------------------------------------------------------------------------------------
+# The wording of Aurenflow International (the worldreach repository, worldreach/outreach/templates.py), taken over
+# for India on 19 November 2026: per kind of business what goes wrong (pain), what we do (what), an example sum
+# (math, always "if"), the topic and the subjects. Each business gets the same variant every time (by its key), two
+# businesses rarely the same. Used through the placeholders {pain} {what} {math} {topic} {people} {cta} {cta2}
+# {group_subject} (config/in/_base.toml [outreach.email] first, follow_ups and subjects).
+GROWTH: dict[str, dict] = {
+    "fitness": {
+        "audience": "gyms and studios", "people": "members", "topic": "winning back past members",
+        "subjects": ["past members of {business}", "{business}: members who stopped coming",
+                     "a question about {business}"],
+        "pain": ["Most gyms and studios have a list of members who quietly stopped coming, and nobody has the time to "
+                 "write to each of them.",
+                 "Every studio has members who meant to come back and never did, and a failed payment often ends a "
+                 "membership without anyone noticing."],
+        "what": "We do that follow-up for you: a short, friendly message series to past members, polite reminders "
+                "when a payment fails, and a Google review request to members who are happy. It runs from your own "
+                "member list, and there is nothing to install.",
+        "math": "if {business} has 300 past members and only 5 in 100 come back, that is 15 memberships from people "
+                "who already know you",
+    },
+    "martial": {
+        "audience": "martial arts schools", "people": "students", "topic": "bringing back past students",
+        "subjects": ["past students of {business}", "{business}: students who stopped training",
+                     "a question about {business}"],
+        "pain": ["Most schools have a list of students who stopped training after a few months, and parents who "
+                 "meant to renew and forgot.",
+                 "Every school loses students between belts, and unpaid fees are awkward to chase in person."],
+        "what": "We do that follow-up for you: a friendly message series to past students and their parents, polite "
+                "reminders for unpaid fees, and a Google review request to happy families. It runs from your own "
+                "student list, and there is nothing to install.",
+        "math": "if {business} has 200 past students and only 5 in 100 return, that is 10 students back on the mat",
+    },
+    "salon": {
+        "audience": "salons and spas", "people": "clients", "topic": "bringing back clients who are overdue",
+        "subjects": ["clients of {business} who are overdue", "{business}: empty chairs", "a question about {business}"],
+        "pain": ["Most salons have clients who were happy, meant to rebook and simply never got round to it.",
+                 "A client who is two weeks overdue rarely calls; usually it only takes one friendly reminder."],
+        "what": "We send that reminder for you: a short message when a client is due for the next visit, a friendly "
+                "series to the ones who have not been in for months, and a Google review request after a good "
+                "appointment. It runs from your own client list, and there is nothing to install.",
+        "math": "if {business} has 400 clients who have not been in for three months and 8 in 100 rebook, that is 32 "
+                "appointments from people who already like you",
+    },
+    "food": {
+        "audience": "restaurants and cafes", "people": "guests", "topic": "bringing past guests back",
+        "subjects": ["past guests of {business}", "{business}: guests who came once", "a question about {business}"],
+        "pain": ["Most restaurants have hundreds of guests in their booking and ordering lists who came once, liked "
+                 "it, and were never invited back.",
+                 "A first visit is the expensive one to win; the second usually only needs an invitation."],
+        "what": "We send that invitation for you: a friendly note to guests who have not been back in a while, a "
+                "thank-you with a Google review request after a visit, and a reminder before the dates that matter "
+                "to you. It runs from the guest list you already have, and there is nothing to install.",
+        "math": "if {business} has 1,000 past guests on its lists and 4 in 100 book again, that is 40 tables from "
+                "people who already know the food",
+    },
+    "hotel": {
+        "audience": "hotels and guesthouses", "people": "guests", "topic": "direct rebookings and reviews",
+        "subjects": ["past guests of {business}", "{business}: direct bookings from past guests",
+                     "a question about {business}"],
+        "pain": ["Most guests who enjoyed their stay would come back or leave a review, but once they have checked "
+                 "out nobody writes to them.",
+                 "Past guests are the cheapest bookings a hotel can get, and they usually return through a booking "
+                 "site that takes its commission."],
+        "what": "We do that follow-up for you: a thank-you with a Google review request after checkout, and an "
+                "invitation to past guests to book direct for their next stay. It runs from your own guest list, "
+                "and there is nothing to install.",
+        "math": "if {business} writes to 500 past guests and 3 in 100 book direct, that is 15 stays without a "
+                "booking-site commission",
+    },
+    "pets": {
+        "audience": "groomers and pet services", "people": "clients", "topic": "rebooking clients who are overdue",
+        "subjects": ["clients of {business} who are overdue", "{business}: rebooking reminders",
+                     "a question about {business}"],
+        "pain": ["Most pet owners mean to rebook every six weeks and remember after ten.",
+                 "Owners who were happy rarely leave a review or rebook on time unless someone reminds them."],
+        "what": "We send that reminder for you: a short message when a pet is due again, a friendly series to "
+                "clients who have not been back, and a Google review request after a visit. It runs from your own "
+                "client list, and there is nothing to install.",
+        "math": "if {business} has 300 clients who are overdue and 10 in 100 rebook, that is 30 appointments",
+    },
+    "auto": {
+        "audience": "garages and detailers", "people": "customers", "topic": "service reminders and reviews",
+        "subjects": ["customers of {business} who are due", "{business}: service reminders",
+                     "a question about {business}"],
+        "pain": ["Most drivers forget when the next service is due, and go wherever is nearest on the day they "
+                 "remember.",
+                 "Customers are happiest on the day they collect the car, and almost nobody asks them for a review "
+                 "then."],
+        "what": "We do that follow-up for you: a reminder when a customer is due again, a friendly note to the ones "
+                "who have not been back in a year, and a Google review request after each job. It runs from your "
+                "own customer list, and there is nothing to install.",
+        "math": "if {business} has 600 customers who are due and 5 in 100 book, that is 30 jobs",
+    },
+    "default": {
+        "audience": "local businesses", "people": "customers", "topic": "bringing past customers back",
+        "subjects": ["past customers of {business}", "{business}: customers who came once",
+                     "a question about {business}"],
+        "pain": ["Most local businesses have a list of customers who were happy and simply never came back, and "
+                 "nobody has the time to write to each of them.",
+                 "Winning a new customer is expensive; a past customer usually only needs a friendly reminder."],
+        "what": "We do that follow-up for you: a friendly message series to past customers, a reminder when someone "
+                "is due again, and a Google review request to the happy ones. It runs from your own customer list, "
+                "and there is nothing to install.",
+        "math": "if {business} has 500 past customers and 5 in 100 come back, that is 25 sales from people who "
+                "already know you",
+    },
+}
+
+# Our category keys (config/shared/categories.toml) -> the wording group.
+_GROWTH_WORDS = {
+    "martial": ("martial", "karate", "judo", "taekwondo", "jiu"),
+    "fitness": ("gym", "fitness", "yoga", "pilates", "studio", "dance", "crossfit", "boxing", "climb", "swim"),
+    "salon": ("salon", "barber", "beauty", "nail", "spa", "hair", "tattoo", "massage", "lash", "brow"),
+    "food": ("restaurant", "cafe", "coffee", "bar", "pub", "bakery", "ice_cream", "dessert", "food"),
+    "hotel": ("hotel", "guest", "bnb", "hostel", "motel", "inn", "resort", "lodg"),
+    "pets": ("pet", "vet", "groom", "kennel"),
+    "auto": ("auto", "garage", "car_wash", "car", "detail", "tire"),
+}
+
+
+
+GROWTH_CTA = ['Would it be worth a quick chat? A one-word "yes" is enough.',
+              'Shall I send you a free preview with your name on it? Just reply "yes".',
+              'Would a free preview for {business} be useful? A reply with "yes" is all it takes.']
+GROWTH_CTA2 = ['Shall I send you a free preview with {business}\'s name on it? A "yes" is enough.',
+               'Would you like a free preview for {business}? Just reply "yes".']
+
+
+def growth_group(key: str) -> str:
+    k = (key or "").lower()
+    for group, words in _GROWTH_WORDS.items():
+        if any(w in k for w in words):
+            return group
+    return "default"
+
+
 PLACEHOLDERS = {"greeting", "business", "first_name", "first_name_or_team", "audience", "place", "hook", "usp", "intro",
                 "offer", "demo_link", "sender_name", "sender_first", "sender_business", "sender_phone", "sender_city",
-                "sender_address", "sender_website", "footer", "source_line", "person", "attachment_note"}
+                "sender_address", "sender_website", "footer", "source_line", "person", "attachment_note",
+                "pain", "what", "math", "topic", "people", "cta", "cta2", "group_subject"}
 
 # The templates the rest of the code (and the config validation) refers to, in the default language.
 SUBJECTS = EN["subjects"]
@@ -298,6 +438,15 @@ def context(lead, oc: dict, lang: str = "") -> dict:
     ctx["usp"] = usp
     ctx["intro"] = render(t["intro_usp"] if usp and t["intro_usp"] else t["intro_plain"], ctx)
     ctx["source_line"] = render(t["source_line"], ctx) if t.get("source_line") else ""
+    g = GROWTH[growth_group(getattr(lead, "category_key", "") or getattr(lead, "category_label", ""))]
+    seed = lead.key or lead.business
+    ctx.update(people=g["people"], topic=g["topic"])
+    ctx["pain"] = render(pick(g["pain"], seed + ":pain"), ctx)
+    ctx["what"] = render(g["what"], ctx)
+    ctx["math"] = render(g["math"], ctx)
+    ctx["cta"] = render(pick(GROWTH_CTA, seed + ":cta"), ctx)
+    ctx["cta2"] = render(pick(GROWTH_CTA2, seed + ":cta2"), ctx)
+    ctx["group_subject"] = render(pick(g["subjects"], seed + ":subject"), ctx)
     ctx["footer"] = render((oc.get("email") or {}).get("footer") or t["footer"], ctx)
     return ctx
 
